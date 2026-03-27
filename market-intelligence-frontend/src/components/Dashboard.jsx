@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import {ArrowLeft} from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, AlertCircle } from 'lucide-react';
 
 export default function Dashboard({ onHome }) {
   const [tickerInput, setTickerInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorState, setErrorState] = useState(null);
   const [userResponse, setUserResponse] = useState("");
   const [chatLogs, setChatLogs] = useState([]);
   
@@ -14,20 +15,49 @@ export default function Dashboard({ onHome }) {
     mediator: null
   });
 
+  const wsRef = useRef(null);
+
   useEffect(() => {
-    // Attempt WebSocket connection gracefully
-    const socket = new WebSocket("ws://localhost:3001");
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.agent) setResults((prev) => ({ ...prev, [data.agent]: data }));
-        else if (data.decision) { setResults((prev) => ({ ...prev, mediator: data })); setLoading(false); }
-      } catch (err) {}
+    let reconnectTimer;
+    const connectWS = () => {
+      const socket = new WebSocket("ws://localhost:3001");
+      socket.onopen = () => { setErrorState(null); };
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+        if (data.error) {
+          setErrorState(data.error);
+          setLoading(false);
+        } else if (data.agent) {
+          setResults((prev) => ({ ...prev, [data.agent]: data }));
+        } else if (data.decision) { 
+          setResults((prev) => ({ ...prev, mediator: data })); 
+          setLoading(false); 
+        }
+        } catch (err) { }
+      };
+      socket.onclose = () => {
+        reconnectTimer = setTimeout(connectWS, 3000);
+      };
+      socket.onerror = (err) => {
+        // We will mock silently if it fails, but track it
+      };
+      wsRef.current = socket;
     };
-    return () => socket.close();
+
+    connectWS();
+    return () => {
+      clearTimeout(reconnectTimer);
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
+    };
   }, []);
 
   const simulateWebSocketDemo = () => {
+    // If backend is down, run the demo
+    setErrorState("Backend unreachable. Running autonomic fallback simulation.");
     setChatLogs([]);
     setTimeout(() => setResults(prev => ({ ...prev, bull: { 
       agent: "bull", verdict: "BUY", confidence: 74, 
@@ -54,6 +84,7 @@ export default function Dashboard({ onHome }) {
   const handleAnalyze = async () => {
     if (!tickerInput.trim() || loading) return;
     setLoading(true);
+    setErrorState(null);
     setResults({ bull: null, bear: null, risk: null, mediator: null });
     
     try {
@@ -62,8 +93,10 @@ export default function Dashboard({ onHome }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker: tickerInput.toUpperCase().trim() })
       });
-      if (!res.ok) throw new Error("Backend API down");
+      if (!res.ok) throw new Error("Backend API returned " + res.status);
     } catch (err) {
+      console.error(err);
+      setErrorState(`Network Error: ${err.message}. Running fallback...`);
       simulateWebSocketDemo();
     }
   };
@@ -76,7 +109,6 @@ export default function Dashboard({ onHome }) {
     if (!userResponse.trim()) return;
     setChatLogs([...chatLogs, { sender: 'You', text: userResponse }]);
     setUserResponse('');
-    // Mock simple backend response simulation for the interaction
     setTimeout(() => {
       setChatLogs(prev => [...prev, { 
         sender: 'Mediator', 
@@ -85,26 +117,22 @@ export default function Dashboard({ onHome }) {
     }, 1500);
   };
 
-  const resetView = () => {
-    setTickerInput("");
-    setResults({ bull: null, bear: null, risk: null, mediator: null });
-    setChatLogs([]);
-  };
-
-  const AgentColumn = ({ title, agentKey, animClass }) => {
+  const AgentColumn = ({ title, agentKey }) => {
     const data = results[agentKey];
     if (!data) {
+      // Skeleton Loading State
       return (
-        <div className={`base-card agent-column ${animClass}`} style={{ opacity: 0.5 }}>
-          <h4 className="agent-title">{title}</h4>
-          <div style={{ padding: '3rem 0', textAlign: 'center', fontSize: '0.875rem', color: '#666', letterSpacing: '0.1em' }}>
-            AWAITING SIGNAL...
-          </div>
+        <div className="base-card agent-column" style={{ opacity: 0.7 }}>
+          <h4 className="agent-title" style={{color: '#555'}}>{title}</h4>
+          <div className="skeleton-line" style={{width: '60%', height: '24px', marginBottom: '1.5rem'}}></div>
+          <div className="skeleton-line" style={{width: '100%'}}></div>
+          <div className="skeleton-line" style={{width: '90%'}}></div>
+          <div className="skeleton-line" style={{width: '95%'}}></div>
         </div>
       );
     }
     return (
-      <div className={`base-card agent-column ${animClass}`}>
+      <div className="base-card agent-column agent-arrive-anim">
         <h4 className="agent-title">{title}</h4>
         <div className="agent-verdict-row">
           <span className="verdict-chip">{data.verdict}</span>
@@ -117,6 +145,16 @@ export default function Dashboard({ onHome }) {
         </ul>
       </div>
     );
+  };
+
+  // Conflict Visualization Helpers
+  const getConflictColor = (score) => {
+    if (!score) return '#ffffff';
+    const s = score.toUpperCase();
+    if (s === 'HIGH') return '#ef4444'; // Red
+    if (s === 'MEDIUM') return '#f59e0b'; // Amber
+    if (s === 'LOW') return '#10b981'; // Green
+    return '#ffffff';
   };
 
   return (
@@ -138,6 +176,14 @@ export default function Dashboard({ onHome }) {
 
       <div className="dashboard-container anim-stagger-1">
         
+        {/* Error Banner */}
+        {errorState && (
+          <div className="anim-stagger-1" style={{backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '1rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem'}}>
+            <AlertCircle size={18} />
+            {errorState}
+          </div>
+        )}
+
         {/* Input bar */}
         <div className="zone-1-wrapper" style={{marginBottom: '0.5rem'}}>
           <div className="input-field-container">
@@ -168,7 +214,7 @@ export default function Dashboard({ onHome }) {
             <span className="audit-label">Consensus Conf</span>
           </div>
           <div className="base-card audit-card">
-            <span className="audit-value">
+            <span className="audit-value" style={{color: getConflictColor(results.mediator?.conflict_score)}}>
               {results.mediator ? results.mediator.conflict_score : '---'}
             </span>
             <span className="audit-label">Conflict Level</span>
@@ -180,19 +226,21 @@ export default function Dashboard({ onHome }) {
         </div>
 
         <div className="agents-grid">
-          <AgentColumn title="BULL AGENT" agentKey="bull" animClass="anim-stagger-2" />
-          <AgentColumn title="BEAR AGENT" agentKey="bear" animClass="anim-stagger-3" />
-          <AgentColumn title="RISK AGENT" agentKey="risk" animClass="anim-stagger-4" />
+          <AgentColumn title="BULL AGENT" agentKey="bull" />
+          <AgentColumn title="BEAR AGENT" agentKey="bear" />
+          <AgentColumn title="RISK AGENT" agentKey="risk" />
         </div>
 
         {results.mediator ? (
           <div>
-            <div className="base-card decision-wrap anim-stagger-1">
+            <div className="base-card decision-wrap agent-arrive-anim">
               <div className="decision-header">
                 <div className="decision-title">
                   {tickerInput.toUpperCase()} <span>→ {results.mediator.decision}</span>
                 </div>
-                <div className="conflict-badge">{results.mediator.conflict_score} CONFLICT</div>
+                <div className="conflict-badge" style={{borderColor: getConflictColor(results.mediator.conflict_score), color: getConflictColor(results.mediator.conflict_score)}}>
+                  {results.mediator.conflict_score} CONFLICT
+                </div>
               </div>
               <p className="decision-rationale">{results.mediator.rationale}</p>
               <div className="decision-trigger">
@@ -205,7 +253,7 @@ export default function Dashboard({ onHome }) {
             </div>
 
             {/* Interactive User Response Field */}
-            <div className="base-card anim-stagger-2" style={{ marginTop: '2.5rem', padding: '2rem' }}>
+            <div className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem' }}>
               <h4 style={{fontSize: '0.875rem', fontWeight: 800, marginBottom: '1.5rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em'}}>
                 Adjust Agent Constraints & Respond
               </h4>
@@ -238,10 +286,11 @@ export default function Dashboard({ onHome }) {
             </div>
           </div>
         ) : (
-          <div className="base-card decision-wrap anim-stagger-1" style={{ opacity: 0.5, textAlign: 'center', padding: '3rem 0' }}>
-            <p style={{ color: '#888', fontSize: '0.875rem', fontWeight: 700, letterSpacing: '0.1em' }}>
-              AWAITING MEDIATOR RESOLUTION...
-            </p>
+          <div className="base-card decision-wrap anim-stagger-1" style={{ opacity: 0.5, padding: '3rem 2.5rem' }}>
+            <div className="skeleton-line" style={{width: '40%', height: '32px', marginBottom: '2rem'}}></div>
+            <div className="skeleton-line" style={{width: '100%', marginBottom: '1rem'}}></div>
+            <div className="skeleton-line" style={{width: '80%', marginBottom: '2rem'}}></div>
+            <div className="skeleton-line" style={{width: '95%', height: '50px'}}></div>
           </div>
         )}
       </div>

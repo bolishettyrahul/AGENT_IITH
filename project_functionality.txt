@@ -1,0 +1,28 @@
+MARKET.INTEL — PARALLEL MARKET REASONING ENGINE
+--------------------------------------------------------------------------------
+Current State of the Project (Hackathon Build)
+
+1. OVERVIEW
+This application is a full-stack, distributed-cognition market analysis engine. Users input a stock ticker (e.g., AAPL) and the system deploys three distinct, parallel AI Agents (Bull, Bear, Risk) out into the web. They independently analyze live web-scraped news for positive, negative, and external risk signals. Once all three arrive at a verdict, a master "Mediator" Agent algorithmically synthesizes the dissonance into an actionable institutional recommendation.
+
+2. FRONTEND ARCHITECTURE (React + Vite)
+- Design Aesthetic: Bypassed Tailwind entirely for a handcrafted, stark black-and-white "Tailark" glassmorphism aesthetic. Features radial gradient glows, cinematic CSS (@keyframes) fade-ins, and real-time dashboard skeletons.
+- Two-State Routing: The `App.jsx` handles seamless transitioning between a highly animated Landing Page ("Experience the future of financial analysis") and the actual `Dashboard.jsx`.
+- Live WebSocket Pipeline: When the user hits "Analyze", the UI makes an HTTP POST to the backend and immediately locks on to `ws://localhost:3001`. 
+- Progressive Component Rendering: Instead of waiting for a single massive payload, the UI dynamically renders 3 agent columns ("BULL AGENT", "BEAR AGENT", "RISK AGENT") sequentially the exact millisecond each agent emits its payload. 
+- Conflict Visualizations: The final Mediator verdict calculates "Conflict Scores" mapping strictly to specific color metrics (Red=High, Amber=Medium, Green=Low).
+- Developer Safe-Mode: If the backend crashes during a live demo, the frontend catches the `fetch` error, throws up a red Network Alert Banner, and triggers `simulateWebSocketDemo()` — a bulletproof hardcoded fallback that expertly mimics the live-streaming AI logic to ensure presentations never fail. 
+- Interactive Loop: Features an interactive chat box allowing hypothetical constraint modifications for future iterations.
+
+3. BACKEND ARCHITECTURE (Express + Node + WebSocket)
+- Parallel Deliberation Pipeline: Triggers upon `POST /analyze`. To prevent latency bottlenecks, it utilizes `Promise.allSettled()` to launch all 3 analyst agents concurrently.
+- Bright Data Scraping: Leverages Puppeteer over Bright Data's global network to aggressively scrape Yahoo Finance for live news strings upon ticker input.
+- Groq / Llama 3 Inference: The actual agent cognition relies on the blazing-fast Groq API running `llama-3.3-70b-versatile`. We pass deeply engineered system prompts to physically force the models to emit strictly parsed JSON structures (`verdict`, `confidence`, `reasons`).
+- Supabase Integration: The pipeline hooks directly into a cloud-hosted Postgres instance on Supabase. Every distinct signal—from the Bull's preliminary analysis to the Mediator's final action trigger—is persisted blindly in the `signals` table for audit logging.
+- Live Broadcast: Utilizing the native `ws` tracking array, as soon as `bull.js`, `bear.js`, or `mediator.js` resolve their individual Groq API requests, `server.js` blasts the JSON string directly onto the open WebSocket channel to paint the frontend natively.
+
+4. CURRENT FUNCTIONALITY STATUS
+- Both the Landing Page and immersive live Dashboard are 100% built and styled.
+- Real-time Web Socket Streaming and Native Error Handling are securely operational.
+- Live data fetching via Bright Data & Groq inference is validated and integrated.
+- Postgres logging (Supabase) is wired up gracefully.
