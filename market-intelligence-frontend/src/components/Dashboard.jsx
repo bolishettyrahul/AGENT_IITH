@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import {ArrowLeft} from 'lucide-react'
 
-export default function Dashboard() {
-  const [tickerInput, setTickerInput] = useState("AAPL");
+export default function Dashboard({ onHome }) {
+  const [tickerInput, setTickerInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [userResponse, setUserResponse] = useState("");
+  const [chatLogs, setChatLogs] = useState([]);
+  
   const [results, setResults] = useState({
     bull: null,
     bear: null,
@@ -11,52 +15,32 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    // Attempt to connect to WebSocket on mount
+    // Attempt WebSocket connection gracefully
     const socket = new WebSocket("ws://localhost:3001");
-    
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.agent) {
-          // agent is "bull" | "bear" | "risk"
-          setResults((prev) => ({ ...prev, [data.agent]: data }));
-        } else if (data.decision) {
-          // mediator event
-          setResults((prev) => ({ ...prev, mediator: data }));
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Failed to parse websocket message", err);
-      }
+        if (data.agent) setResults((prev) => ({ ...prev, [data.agent]: data }));
+        else if (data.decision) { setResults((prev) => ({ ...prev, mediator: data })); setLoading(false); }
+      } catch (err) {}
     };
-
-    socket.onerror = (err) => {
-      console.warn("WebSocket connection failed (Backend might be offline)", err);
-    };
-
     return () => socket.close();
   }, []);
 
   const simulateWebSocketDemo = () => {
-    // 1. Bull finishes first
+    setChatLogs([]);
     setTimeout(() => setResults(prev => ({ ...prev, bull: { 
       agent: "bull", verdict: "BUY", confidence: 74, 
       reasons: ["Q1 revenue beat analyst estimate by 8% vs consensus of 4%", "Services segment grew 14% YoY, highest margin business", "Apple Vision Pro pre-orders exceeded supply by 3x"]
     }})), 1000);
-    
-    // 2. Bear finishes next
     setTimeout(() => setResults(prev => ({ ...prev, bear: {
       agent: "bear", verdict: "SELL", confidence: 61,
       reasons: ["Heightened regulatory pressure.", "Valuation premium at risk.", "China iPhone sales down 24% in first 6 weeks of 2024."]
     }})), 2200);
-    
-    // 3. Risk finishes
     setTimeout(() => setResults(prev => ({ ...prev, risk: {
       agent: "risk", verdict: "HOLD", confidence: 55,
       reasons: ["Concentration risk in fintech sector exposure.", "Ongoing legal challenges regarding digital lending guidelines.", "Macro volatility suggests waiting."]
     }})), 3500);
-    
-    // 4. Mediator completes
     setTimeout(() => {
       setResults(prev => ({ ...prev, mediator: {
         decision: "BUY", confidence: 68, conflict_score: "MEDIUM",
@@ -78,11 +62,8 @@ export default function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker: tickerInput.toUpperCase().trim() })
       });
-      
       if (!res.ok) throw new Error("Backend API down");
-      // The actual results will stream via WebSocket
     } catch (err) {
-      console.warn("Using WebSocket simulation due to backend error:", err);
       simulateWebSocketDemo();
     }
   };
@@ -91,28 +72,44 @@ export default function Dashboard() {
     if (e.key === 'Enter') handleAnalyze();
   };
 
-  // Helper code to map agent skeleton vs data
-  const AgentColumn = ({ title, agentKey }) => {
+  const handleSendResponse = () => {
+    if (!userResponse.trim()) return;
+    setChatLogs([...chatLogs, { sender: 'You', text: userResponse }]);
+    setUserResponse('');
+    // Mock simple backend response simulation for the interaction
+    setTimeout(() => {
+      setChatLogs(prev => [...prev, { 
+        sender: 'Mediator', 
+        text: "Parameters adjusted. Monitoring data feeds with new constraints..." 
+      }]);
+    }, 1500);
+  };
+
+  const resetView = () => {
+    setTickerInput("");
+    setResults({ bull: null, bear: null, risk: null, mediator: null });
+    setChatLogs([]);
+  };
+
+  const AgentColumn = ({ title, agentKey, animClass }) => {
     const data = results[agentKey];
     if (!data) {
       return (
-        <div className="agent-column" style={{ opacity: 0.5 }}>
+        <div className={`base-card agent-column ${animClass}`} style={{ opacity: 0.5 }}>
           <h4 className="agent-title">{title}</h4>
-          <div style={{ padding: '2rem 0', textAlign: 'center', fontSize: '0.875rem', color: '#666' }}>
+          <div style={{ padding: '3rem 0', textAlign: 'center', fontSize: '0.875rem', color: '#666', letterSpacing: '0.1em' }}>
             AWAITING SIGNAL...
           </div>
         </div>
       );
     }
     return (
-      <div className="agent-column">
+      <div className={`base-card agent-column ${animClass}`}>
         <h4 className="agent-title">{title}</h4>
         <div className="agent-verdict-row">
           <span className="verdict-chip">{data.verdict}</span>
           <span className="agent-conf-text">{data.confidence}% CONFIDENCE</span>
         </div>
-        <div className="agent-divider"></div>
-        <div className="agent-divider short"></div>
         <ul className="agent-bullet-list">
           {data.reasons.map((pt, i) => (
             <li key={i} className="agent-bullet">{pt}</li>
@@ -124,8 +121,12 @@ export default function Dashboard() {
 
   return (
     <>
+      <div className="background-glow" />
+      
       <nav className="top-navbar">
-        <div className="navbar-brand">MARKET INTELLIGENCE AGENT</div>
+        <div className="navbar-brand" onClick={onHome} style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+          <ArrowLeft size={16}/> MARKET.INTEL
+        </div>
         <div className="navbar-status">
           {loading ? (
             <span className="status-indicator loading">DELIBERATING</span>
@@ -135,81 +136,114 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      <div className="dashboard-container">
+      <div className="dashboard-container anim-stagger-1">
         
         {/* Input bar */}
-        <div className="zone-1-wrapper">
+        <div className="zone-1-wrapper" style={{marginBottom: '0.5rem'}}>
           <div className="input-field-container">
             <input 
               type="text" 
-              className="input-field" 
+              className="hero-input"
               value={tickerInput}
               onChange={(e) => setTickerInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="ENTER TICKER SYMBOL..."
+              placeholder="ENTER TICKER SYMBOL TO START ANALYSIS..."
+              autoFocus
             />
           </div>
-          <button className="btn-analyze" onClick={handleAnalyze} disabled={loading}>
+          <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim()} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
             {loading ? 'ANALYZING...' : 'ANALYZE'}
           </button>
         </div>
 
-        {/* Audit trail / Status Stats */}
-        <div className="audit-grid">
-          <div className="audit-card">
+        <div className="audit-grid anim-stagger-2">
+          <div className="base-card audit-card">
             <span className="audit-value">{results.bull ? 1 : 0} / 3</span>
-            <span className="audit-label">Agents Completed</span>
+            <span className="audit-label">Agents Complete</span>
           </div>
-          <div className="audit-card">
+          <div className="base-card audit-card">
             <span className="audit-value">
               {results.mediator ? `${results.mediator.confidence}%` : '---'}
             </span>
             <span className="audit-label">Consensus Conf</span>
           </div>
-          <div className="audit-card">
+          <div className="base-card audit-card">
             <span className="audit-value">
               {results.mediator ? results.mediator.conflict_score : '---'}
             </span>
             <span className="audit-label">Conflict Level</span>
           </div>
+          <div className="base-card audit-card">
+            <span className="audit-value">LIVE</span>
+            <span className="audit-label">Websocket</span>
+          </div>
         </div>
 
-        {/* Agent reasoning columns */}
         <div className="agents-grid">
-          <AgentColumn title="BULL AGENT" agentKey="bull" />
-          <AgentColumn title="BEAR AGENT" agentKey="bear" />
-          <AgentColumn title="RISK AGENT" agentKey="risk" />
+          <AgentColumn title="BULL AGENT" agentKey="bull" animClass="anim-stagger-2" />
+          <AgentColumn title="BEAR AGENT" agentKey="bear" animClass="anim-stagger-3" />
+          <AgentColumn title="RISK AGENT" agentKey="risk" animClass="anim-stagger-4" />
         </div>
 
-        {/* Final decision card */}
         {results.mediator ? (
-          <div className="decision-wrap">
-            <div className="decision-header">
-              <div className="decision-title">
-                {tickerInput.toUpperCase()} <span>→ {results.mediator.decision}</span>
+          <div>
+            <div className="base-card decision-wrap anim-stagger-1">
+              <div className="decision-header">
+                <div className="decision-title">
+                  {tickerInput.toUpperCase()} <span>→ {results.mediator.decision}</span>
+                </div>
+                <div className="conflict-badge">{results.mediator.conflict_score} CONFLICT</div>
               </div>
-              <div className="conflict-badge">{results.mediator.conflict_score} CONFLICT</div>
+              <p className="decision-rationale">{results.mediator.rationale}</p>
+              <div className="decision-trigger">
+                <strong>ACTION TRIGGER:</strong> {results.mediator.trigger}
+              </div>
+              <div className="meta-chip-row">
+                <span className="meta-pill">{results.mediator.confidence}% CONFIDENCE</span>
+                <span className="meta-pill">RESOLVED</span>
+              </div>
             </div>
-            
-            <p className="decision-rationale">{results.mediator.rationale}</p>
-            
-            <div className="decision-trigger">
-              <strong>ACTION TRIGGER:</strong> {results.mediator.trigger}
-            </div>
-            
-            <div className="meta-chip-row">
-              <span className="meta-pill">{results.mediator.confidence}% MEDIATOR CONFIDENCE</span>
-              <span className="meta-pill">LIVE SYNCED</span>
+
+            {/* Interactive User Response Field */}
+            <div className="base-card anim-stagger-2" style={{ marginTop: '2.5rem', padding: '2rem' }}>
+              <h4 style={{fontSize: '0.875rem', fontWeight: 800, marginBottom: '1.5rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em'}}>
+                Adjust Agent Constraints & Respond
+              </h4>
+              
+              {chatLogs.length > 0 && (
+                <div style={{marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                  {chatLogs.map((log, idx) => (
+                    <div key={idx} style={{fontSize: '0.875rem', color: log.sender === 'You' ? '#ccc' : '#fff'}}>
+                      <strong style={{color: '#888', marginRight: '0.5rem'}}>{log.sender}:</strong>
+                      {log.text}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{display: 'flex', gap: '1.5rem', alignItems: 'center'}}>
+                <input 
+                  type="text" 
+                  className="hero-input" 
+                  style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '1rem 1.25rem', fontSize: '1rem'}}
+                  placeholder="Provide additional context or ask for clarification..."
+                  value={userResponse}
+                  onChange={e => setUserResponse(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSendResponse()}
+                />
+                <button className="btn-primary" onClick={handleSendResponse} style={{padding: '1rem 2.5rem', fontSize: '1rem'}}>
+                  SEND
+                </button>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="decision-wrap" style={{ opacity: 0.5, textAlign: 'center', padding: '3rem 0' }}>
-            <p style={{ color: '#666', fontSize: '0.875rem', fontWeight: 600, letterSpacing: '0.1em' }}>
-              PENDING MEDIATOR RESOLUTION
+          <div className="base-card decision-wrap anim-stagger-1" style={{ opacity: 0.5, textAlign: 'center', padding: '3rem 0' }}>
+            <p style={{ color: '#888', fontSize: '0.875rem', fontWeight: 700, letterSpacing: '0.1em' }}>
+              AWAITING MEDIATOR RESOLUTION...
             </p>
           </div>
         )}
-        
       </div>
     </>
   );
