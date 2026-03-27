@@ -36,22 +36,22 @@ function broadcast(data) {
   }
 }
 
-// POST /analyze — accepts { ticker }
+// POST /analyze — accepts { ticker, persona }
 app.post('/analyze', async (req, res) => {
-  const { ticker } = req.body;
+  const { ticker, persona = 'balanced' } = req.body;
   if (!ticker) return res.status(400).json({ error: 'ticker is required' });
 
   res.status(200).json({ status: 'processing', ticker });
 
   // Run pipeline async — results pushed via WebSocket as they arrive
-  runPipeline(ticker.toUpperCase()).catch((err) => {
+  runPipeline(ticker.toUpperCase(), persona).catch((err) => {
     console.error('[Pipeline error]', err.message);
     broadcast({ error: err.message, ticker });
   });
 });
 
-async function runPipeline(ticker) {
-  console.log(`[Pipeline] Starting analysis for ${ticker}`);
+async function runPipeline(ticker, persona) {
+  console.log(`[Pipeline] Starting analysis for ${ticker} [Persona: ${persona}]`);
 
   // Step 1 — Scrape
   let newsText;
@@ -97,7 +97,7 @@ async function runPipeline(ticker) {
   }
 
   // Step 3 — Mediator resolves conflict
-  const mediatorResult = await runMediatorAgent(agentResults.bull, agentResults.bear, agentResults.risk);
+  const mediatorResult = await runMediatorAgent(agentResults.bull, agentResults.bear, agentResults.risk, persona);
   broadcast(mediatorResult);
   saveSignal({ ticker, agent: 'mediator', verdict: mediatorResult.decision, confidence: mediatorResult.confidence, decision: mediatorResult.decision, conflict_score: mediatorResult.conflict_score, trigger: mediatorResult.trigger, rationale: mediatorResult.rationale });
   console.log('[Mediator]', JSON.stringify(mediatorResult));
@@ -108,7 +108,7 @@ app.get('/', (_req, res) => res.json({
   status: 'ok',
   service: 'Market Intelligence Agent',
   endpoints: {
-    analyze: 'POST /analyze  body: { ticker: "AAPL" }',
+    analyze: 'POST /analyze  body: { ticker: "AAPL", persona: "balanced" }',
     health:  'GET  /health',
   },
   websocket: `ws://localhost:${process.env.PORT || 3001}`,

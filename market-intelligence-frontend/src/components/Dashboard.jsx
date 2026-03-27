@@ -3,6 +3,7 @@ import { ArrowLeft, AlertCircle } from 'lucide-react';
 
 export default function Dashboard({ onHome }) {
   const [tickerInput, setTickerInput] = useState("");
+  const [persona, setPersona] = useState("balanced");
   const [loading, setLoading] = useState(false);
   const [errorState, setErrorState] = useState(null);
   const [userResponse, setUserResponse] = useState("");
@@ -91,7 +92,7 @@ export default function Dashboard({ onHome }) {
       const res = await fetch("http://localhost:3001/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: tickerInput.toUpperCase().trim() })
+        body: JSON.stringify({ ticker: tickerInput.toUpperCase().trim(), persona })
       });
       if (!res.ok) throw new Error("Backend API returned " + res.status);
     } catch (err) {
@@ -186,16 +187,31 @@ export default function Dashboard({ onHome }) {
 
         {/* Input bar */}
         <div className="zone-1-wrapper" style={{marginBottom: '0.5rem'}}>
-          <div className="input-field-container">
+          <div className="input-field-container" style={{display: 'flex', gap: '1rem', padding: '0.625rem 1.25rem', alignItems: 'center'}}>
             <input 
               type="text" 
               className="hero-input"
               value={tickerInput}
               onChange={(e) => setTickerInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="ENTER TICKER SYMBOL TO START ANALYSIS..."
+              placeholder="ENTER TICKER SYMBOL..."
+              style={{flex: 1}}
               autoFocus
             />
+            <select 
+              className="hero-input"
+              style={{ 
+                width: 'auto', flexShrink: 0, background: 'transparent', border: 'none',
+                borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '1rem',
+                color: '#aaa', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600, letterSpacing: '0.05em'
+              }}
+              value={persona}
+              onChange={e => setPersona(e.target.value)}
+            >
+              <option style={{background: '#0a0a0a', color: '#fff'}} value="balanced">BALANCED TRADER</option>
+              <option style={{background: '#0a0a0a', color: '#ef4444'}} value="aggressive">AGGRESSIVE TRADER</option>
+              <option style={{background: '#0a0a0a', color: '#10b981'}} value="conservative">CONSERVATIVE TRADER</option>
+            </select>
           </div>
           <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim()} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
             {loading ? 'ANALYZING...' : 'ANALYZE'}
