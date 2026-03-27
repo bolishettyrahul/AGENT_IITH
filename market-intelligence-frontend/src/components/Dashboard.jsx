@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import DebateSection from './DebateSection';
 
 export default function Dashboard({ onHome }) {
   const [tickerInput, setTickerInput] = useState("");
   const [persona, setPersona] = useState("balanced");
   const [loading, setLoading] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
   const [errorState, setErrorState] = useState(null);
   const [userResponse, setUserResponse] = useState("");
   const [chatLogs, setChatLogs] = useState([]);
@@ -17,31 +19,51 @@ export default function Dashboard({ onHome }) {
     mediator: null
   });
 
+  const [isDebating, setIsDebating] = useState(false);
+  const [debateTurns, setDebateTurns] = useState([]);
+  const [debateRounds, setDebateRounds] = useState([]);
+  const [debateComplete, setDebateComplete] = useState(null);
+
   const wsRef = useRef(null);
 
   useEffect(() => {
     let reconnectTimer;
     const connectWS = () => {
       const socket = new WebSocket("ws://localhost:3001");
-      socket.onopen = () => { setErrorState(null); };
+      socket.onopen = () => { setWsConnected(true); setErrorState(null); };
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
         if (data.error) {
           setErrorState(data.error);
           setLoading(false);
+          // Trigger demo fallback on agent failures
+          if (data.error.includes('agents failed') || data.error.includes('No data found')) {
+            setTimeout(() => simulateWebSocketDemo(), 500);
+          }
         } else if (data.type === 'sources') {
-          // Receive scraped article metadata early
           setSourceArticles(data.articles || []);
+        } else if (data.type === 'debate_start') {
+          setIsDebating(true);
+        } else if (data.type === 'debate_turn') {
+          setDebateTurns((prev) => [...prev, data]);
+        } else if (data.type === 'debate_round_summary') {
+          setDebateRounds((prev) => [...prev, { round: data.round, summary: data }]);
+        } else if (data.type === 'debate_complete') {
+          setIsDebating(false);
+          setDebateComplete(data);
+        } else if (data.type === 'debate_error') {
+          setIsDebating(false);
         } else if (data.agent) {
           setResults((prev) => ({ ...prev, [data.agent]: data }));
-        } else if (data.decision) { 
-          setResults((prev) => ({ ...prev, mediator: data })); 
-          setLoading(false); 
+        } else if (data.decision) {
+          setResults((prev) => ({ ...prev, mediator: data }));
+          setLoading(false);
         }
         } catch (err) { }
       };
       socket.onclose = () => {
+        setWsConnected(false);
         reconnectTimer = setTimeout(connectWS, 3000);
       };
       socket.onerror = (err) => {
@@ -105,14 +127,76 @@ export default function Dashboard({ onHome }) {
       articles: []
     }})), 3500);
 
+    setTimeout(() => setIsDebating(true), 3800);
+
+    setTimeout(() => setDebateTurns(prev => [...prev, {
+      agent: 'bull', round: 1, turn_type: 'rebuttal',
+      points: [
+        { type: 'counter', claim_addressed: 'EU antitrust will erode App Store margins', response: 'Services margin grew 5pts YoY despite existing regulatory pressure — Bloomberg confirms structural moat [S1, S2]', sources: ['S1', 'S2'], weight: 'HIGH' },
+        { type: 'concede', claim_addressed: 'China iPhone sales down 24%', response: 'Conceded: China hardware weakness is real. However Services revenue at 24% mix offsets geographic hardware risk [S6]', sources: ['S6'], weight: 'MEDIUM' },
+      ],
+      summary: 'Services durability counters regulatory fears. Conceding China hardware risk but revenue mix insulates the thesis.',
+      confidence_before: 74, confidence_after: 68, tier_win: true,
+    }]), 4300);
+
+    setTimeout(() => setDebateTurns(prev => [...prev, {
+      agent: 'bear', round: 1, turn_type: 'partial_concede',
+      points: [
+        { type: 'concede', claim_addressed: 'Services grew 14% YoY to all-time high', response: 'Conceded: Services growth is legitimate. Growth rate is decelerating from prior 18% runs — matters for forward multiple [S6]', sources: ['S6'], weight: 'MEDIUM' },
+        { type: 'counter', claim_addressed: 'Vision Pro pre-orders exceeded supply 3x', response: 'Pre-order signal unverified until shipment data. EU DMA fine alone [S3] could exceed an entire quarter of hardware margin improvement.', sources: ['S3', 'S4'], weight: 'HIGH' },
+      ],
+      summary: 'Conceding Services strength but macro and regulatory headwinds dominate near-term price action.',
+      confidence_before: 61, confidence_after: 57, tier_win: false,
+    }]), 4900);
+
+    setTimeout(() => setDebateTurns(prev => [...prev, {
+      agent: 'risk', round: 1, turn_type: 'devil_advocate',
+      target_agent: 'bull',
+      target_reason: 'Bull holds highest post-rebuttal confidence at 68 — stress-testing their Services margin claim.',
+      attacks: [
+        { claim_attacked: 'Services segment at all-time high margin', attack: 'WSJ [S5] reports 3 additional EU member states joining DMA enforcement — Services faces 15–20% revenue haircut in European markets by Q3, wiping the margin expansion underpinning the Bull thesis.', sources: ['S5', 'S3'], severity: 'HIGH' },
+      ],
+      summary: 'Regulatory cascade risk on Services is under-priced. Bull thesis rests on a margin number facing concentrated regulatory attack.',
+      confidence_before: 55, confidence_after: 58, tier_win: true,
+    }]), 5400);
+
+    setTimeout(() => setDebateRounds(prev => [...prev, {
+      round: 1,
+      summary: { round: 1, confidences: { bull: 68, bear: 57, risk: 58 }, scores: { bull: 1, bear: 0, risk: 1 } },
+    }]), 5700);
+
+    setTimeout(() => {
+      setIsDebating(false);
+      setDebateComplete({
+        rounds_run: 1, convergence_achieved: false, debate_winner: 'bull',
+        final_confidences: { bull: 68, bear: 57, risk: 58 },
+        kelly_weights: { bull: 0.482, bear: 0.298, risk: 0.220 },
+        finance_algorithms: {
+          bayesian_tier_scoring: {
+            description: 'Publisher trust tiers: Reuters/Bloomberg/FT/WSJ=3, major business=2, general=1. Higher-tier rebuttal wins the argument point automatically.',
+            bull_best_tier: 3, bear_best_tier: 3,
+          },
+          delphi_method: {
+            description: 'Confidence scores adjusted after each rebuttal based on argument quality and source tier. Tier-1 rebuttal: -8 to -12 pts. Partial concede: -6 pts.',
+            bull_net_change: -6, bear_net_change: -4, bull_final: 68, bear_final: 57,
+          },
+          kelly_criterion: {
+            description: 'Mediator weights computed from debate win rates + concession credibility bonuses, then biased by persona.',
+            weights: { bull: 0.482, bear: 0.298, risk: 0.220 }, debate_winner: 'bull', rounds_run: 1,
+          },
+        },
+      });
+    }, 6000);
+
     setTimeout(() => {
       setResults(prev => ({ ...prev, mediator: {
         decision: "BUY", confidence: 68, conflict_score: "MEDIUM",
         trigger: "BUY if price drops below $182 on next earnings dip",
-        rationale: "Bull and Risk agents align on strong fundamentals while Bear flags macro headwinds. High bull confidence outweighs moderate bear case, warranting a cautious buy with a price trigger."
+        rationale: "Debate-informed: Bull won Round 1 via tier-3 source rebuttal on Services margin. Bear conceded Services growth but exposed deceleration risk. Kelly weights favor Bull 48.2% vs Bear 29.8% post-debate.",
+        debate_informed: true, debate_rounds: 1, convergence_achieved: false,
       }}));
       setLoading(false);
-    }, 5000);
+    }, 6500);
   };
 
   const handleAnalyze = async () => {
@@ -121,7 +205,11 @@ export default function Dashboard({ onHome }) {
     setErrorState(null);
     setSourceArticles([]);
     setResults({ bull: null, bear: null, risk: null, mediator: null });
-    
+    setIsDebating(false);
+    setDebateTurns([]);
+    setDebateRounds([]);
+    setDebateComplete(null);
+
     try {
       const res = await fetch("http://localhost:3001/analyze", {
         method: "POST",
@@ -329,8 +417,10 @@ export default function Dashboard({ onHome }) {
         <div className="navbar-status">
           {loading ? (
             <span className="status-indicator loading">DELIBERATING</span>
-          ) : (
+          ) : wsConnected ? (
             <span className="status-indicator online">SYSTEM READY</span>
+          ) : (
+            <span className="status-indicator loading">CONNECTING...</span>
           )}
         </div>
       </nav>
@@ -373,7 +463,7 @@ export default function Dashboard({ onHome }) {
               <option style={{background: '#0a0a0a', color: '#10b981'}} value="conservative">CONSERVATIVE TRADER</option>
             </select>
           </div>
-          <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim()} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
+          <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim() || !wsConnected} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
             {loading ? 'ANALYZING...' : 'ANALYZE'}
           </button>
         </div>
@@ -409,6 +499,15 @@ export default function Dashboard({ onHome }) {
           <AgentColumn title="RISK AGENT" agentKey="risk" />
         </div>
 
+        <DebateSection
+          isDebating={isDebating}
+          debateTurns={debateTurns}
+          debateRounds={debateRounds}
+          debateComplete={debateComplete}
+          openingAgents={results}
+          articles={sourceArticles}
+        />
+
         {results.mediator ? (
           <div>
             <div className="base-card decision-wrap agent-arrive-anim">
@@ -428,6 +527,11 @@ export default function Dashboard({ onHome }) {
                 <span className="meta-pill">{results.mediator.confidence}% CONFIDENCE</span>
                 <span className="meta-pill">RESOLVED</span>
                 <span className="meta-pill">{sourceArticles.length} SOURCES ANALYZED</span>
+                {results.mediator.debate_informed && (
+                  <span className="meta-pill">
+                    DEBATE-INFORMED · {results.mediator.debate_rounds} ROUND{results.mediator.debate_rounds !== 1 ? 'S' : ''} · {results.mediator.convergence_achieved ? 'CONVERGED' : 'MAX ROUNDS'}
+                  </span>
+                )}
               </div>
             </div>
 
