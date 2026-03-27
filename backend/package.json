@@ -6,14 +6,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test:phase1": "node test-phase1.js"
+    "test:scraper": "node -e \"require('./scraper/brightdata').scrapeYahooFinance('AAPL').then(t=>console.log(t)).catch(console.error)\""
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.48.1",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "ws": "^8.18.0",
-    "@supabase/supabase-js": "^2.48.1"
+    "puppeteer-core": "^22.15.0",
+    "ws": "^8.18.0"
   }
 }

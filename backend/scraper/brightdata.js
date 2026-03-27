@@ -1,8 +1,7 @@
 const axios = require('axios');
 require('dotenv').config();
 
-// Yahoo Finance unofficial JSON API — no scraping needed, no JS rendering issues.
-// Returns clean structured data (titles, summaries, publisher, publish time).
+// Yahoo Finance unofficial JSON API — primary source, no Bright Data credits used.
 const YF_SEARCH_URL = 'https://query2.finance.yahoo.com/v1/finance/search';
 const YF_CHART_URL  = 'https://query1.finance.yahoo.com/v8/finance/chart';
 
@@ -12,18 +11,28 @@ const YF_HEADERS = {
 };
 
 /**
- * Fetch Yahoo Finance news + basic price context for a ticker.
- * Returns a plain-text block suitable for LLM consumption.
+ * Primary: Yahoo Finance JSON API — fast, no JS rendering required.
+ * Fallback: Bright Data Scraping Browser (puppeteer-core) — used if JSON API fails.
  */
 async function scrapeYahooFinance(ticker) {
-  const [newsRes, chartRes] = await Promise.all([
-    // News headlines + summaries
+  try {
+    return await scrapeViaJsonApi(ticker);
+  } catch (err) {
+    console.warn(`[Scraper] JSON API failed (${err.message}), falling back to Browser API...`);
+    return await scrapeViaBrowserApi(ticker);
+  }
+}
+
+// ─── Primary: Yahoo Finance JSON API ────────────────────────────────────────
+
+async function scrapeViaJsonApi(ticker) {
+  // BUG FIX: Use allSettled so a chart failure doesn't kill the news fetch too
+  const [newsResult, chartResult] = await Promise.allSettled([
     axios.get(YF_SEARCH_URL, {
       params: { q: ticker, newsCount: 15, enableFuzzyQuery: false, quotesCount: 0 },
       headers: YF_HEADERS,
       timeout: 15000,
     }),
-    // Recent price context (last 5 days)
     axios.get(`${YF_CHART_URL}/${ticker}`, {
       params: { interval: '1d', range: '5d' },
       headers: YF_HEADERS,
@@ -31,10 +40,18 @@ async function scrapeYahooFinance(ticker) {
     }),
   ]);
 
-  const news = newsRes.data?.news ?? [];
-  const meta = chartRes.data?.chart?.result?.[0]?.meta ?? {};
+  const news = newsResult.status === 'fulfilled'
+    ? (newsResult.value.data?.news ?? [])
+    : [];
 
-  // Build a readable text block for the LLM
+  const meta = chartResult.status === 'fulfilled'
+    ? (chartResult.value.data?.chart?.result?.[0]?.meta ?? {})
+    : {};
+
+  if (news.length === 0 && !meta.regularMarketPrice) {
+    throw new Error('No data returned from Yahoo Finance JSON API');
+  }
+
   const lines = [];
 
   // Price context
@@ -42,7 +59,8 @@ async function scrapeYahooFinance(ticker) {
     lines.push(`=== ${ticker} Price Context ===`);
     lines.push(`Current Price: $${meta.regularMarketPrice}`);
     if (meta.regularMarketChangePercent !== undefined) {
-      lines.push(`Change: ${meta.regularMarketChangePercent.toFixed(2)}% today`);
+      // BUG FIX: cast to Number before calling .toFixed() — avoids crash if value is a string
+      lines.push(`Change: ${Number(meta.regularMarketChangePercent).toFixed(2)}% today`);
     }
     if (meta.fiftyTwoWeekHigh && meta.fiftyTwoWeekLow) {
       lines.push(`52-Week Range: $${meta.fiftyTwoWeekLow} – $${meta.fiftyTwoWeekHigh}`);
@@ -50,7 +68,6 @@ async function scrapeYahooFinance(ticker) {
     lines.push('');
   }
 
-  // News headlines
   lines.push(`=== ${ticker} Recent News ===`);
   if (news.length === 0) {
     lines.push('No recent news found.');
@@ -63,8 +80,41 @@ async function scrapeYahooFinance(ticker) {
     }
   }
 
-  const text = lines.join('\n');
-  return text.slice(0, 8000);
+  return lines.join('\n').slice(0, 8000);
+}
+
+// ─── Fallback: Bright Data Scraping Browser (puppeteer-core) ────────────────
+
+async function scrapeViaBrowserApi(ticker) {
+  if (!process.env.BROWSER_WS) {
+    throw new Error('BROWSER_WS not set in .env — cannot use Browser API fallback');
+  }
+
+  const puppeteer = require('puppeteer-core');
+  let browser;
+
+  try {
+    console.log('[Scraper] Connecting to Bright Data Scraping Browser...');
+    browser = await puppeteer.connect({
+      browserWSEndpoint: process.env.BROWSER_WS,
+    });
+
+    const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(60000);
+
+    await page.goto(`https://finance.yahoo.com/quote/${ticker}/news/`, {
+      waitUntil: 'domcontentloaded',
+    });
+
+    // Wait for news content to appear (or timeout gracefully)
+    await page.waitForSelector('li[class*="story"]', { timeout: 15000 }).catch(() => {});
+
+    // Pull all visible text — clean and slice for LLM
+    const text = await page.evaluate(() => document.body.innerText);
+    return text.replace(/\s{3,}/g, '\n\n').slice(0, 8000);
+  } finally {
+    if (browser) await browser.close();
+  }
 }
 
 module.exports = { scrapeYahooFinance };
