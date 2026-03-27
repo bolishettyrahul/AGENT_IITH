@@ -60,30 +60,37 @@ async function runPipeline(ticker) {
   }
 
   // Step 2 — Run all 3 agents in parallel, emit each as it resolves
+  // allSettled: one agent failing won't kill the others or block the mediator
   const agentResults = {};
 
-  const agentTasks = [
+  await Promise.allSettled([
     runBullAgent(ticker, newsText).then((result) => {
       agentResults.bull = result;
       broadcast(result);
       saveSignal({ ticker, agent: result.agent, verdict: result.verdict, confidence: result.confidence, reasons: result.reasons });
       console.log('[Bull]', JSON.stringify(result));
-    }),
+    }).catch((err) => console.error('[Bull failed]', err.message)),
+
     runBearAgent(ticker, newsText).then((result) => {
       agentResults.bear = result;
       broadcast(result);
       saveSignal({ ticker, agent: result.agent, verdict: result.verdict, confidence: result.confidence, reasons: result.reasons });
       console.log('[Bear]', JSON.stringify(result));
-    }),
+    }).catch((err) => console.error('[Bear failed]', err.message)),
+
     runRiskAgent(ticker, newsText).then((result) => {
       agentResults.risk = result;
       broadcast(result);
       saveSignal({ ticker, agent: result.agent, verdict: result.verdict, confidence: result.confidence, reasons: result.reasons });
       console.log('[Risk]', JSON.stringify(result));
-    }),
-  ];
+    }).catch((err) => console.error('[Risk failed]', err.message)),
+  ]);
 
-  await Promise.all(agentTasks);
+  // Only run mediator if all 3 agents succeeded
+  if (!agentResults.bull || !agentResults.bear || !agentResults.risk) {
+    broadcast({ error: 'One or more agents failed — mediator skipped', ticker });
+    return;
+  }
 
   // Step 3 — Mediator resolves conflict
   const mediatorResult = await runMediatorAgent(agentResults.bull, agentResults.bear, agentResults.risk);

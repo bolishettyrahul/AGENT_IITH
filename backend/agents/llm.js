@@ -1,27 +1,24 @@
 const axios = require('axios');
 require('dotenv').config();
 
-const FEATHERLESS_BASE = 'https://api.featherless.ai/v1';
+// Groq — OpenAI-compatible, free tier, high rate limits, fast LPU hardware
+const GROQ_BASE = 'https://api.groq.com/openai/v1';
 
-/**
- * Call Featherless.ai with a system + user prompt.
- * Returns the raw response text.
- */
 async function callLLM(systemPrompt, userPrompt) {
   const response = await axios.post(
-    `${FEATHERLESS_BASE}/chat/completions`,
+    `${GROQ_BASE}/chat/completions`,
     {
-      model: process.env.FEATHERLESS_MODEL,
+      model: process.env.GROQ_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.3,
-      max_tokens: 512,
+      max_tokens: 1024,
     },
     {
       headers: {
-        Authorization: `Bearer ${process.env.FEATHERLESS_KEY}`,
+        Authorization: `Bearer ${process.env.GROQ_KEY}`,
         'Content-Type': 'application/json',
       },
       timeout: 30000,
@@ -41,7 +38,6 @@ async function callLLMJson(systemPrompt, userPrompt) {
     const raw = await callLLM(systemPrompt, userPrompt + extra);
 
     try {
-      // Extract the first JSON object found in the response
       const match = raw.match(/\{[\s\S]*\}/);
       if (!match) throw new Error('No JSON object found');
       return JSON.parse(match[0]);
