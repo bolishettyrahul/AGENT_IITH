@@ -99,6 +99,17 @@ async function runPipeline(ticker) {
   console.log('[Mediator]', JSON.stringify(mediatorResult));
 }
 
+// Root — confirms server is live
+app.get('/', (_req, res) => res.json({
+  status: 'ok',
+  service: 'Market Intelligence Agent',
+  endpoints: {
+    analyze: 'POST /analyze  body: { ticker: "AAPL" }',
+    health:  'GET  /health',
+  },
+  websocket: `ws://localhost:${process.env.PORT || 3001}`,
+}));
+
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
