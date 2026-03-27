@@ -12,7 +12,22 @@ const { runMediatorAgent } = require('./agents/mediator');
 const { saveSignal } = require('./db/supabase');
 
 const app = express();
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+// CORS — allow localhost dev + any Vercel deployment + explicit CORS_ORIGIN override
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  /\.vercel\.app$/,
+  ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : []),
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    // allow non-browser requests (curl, Postman, server-to-server)
+    if (!origin) return cb(null, true);
+    const ok = allowedOrigins.some((o) => o instanceof RegExp ? o.test(origin) : o === origin);
+    cb(ok ? null : new Error(`CORS blocked: ${origin}`), ok);
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 const server = http.createServer(app);

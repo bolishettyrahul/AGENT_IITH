@@ -43,147 +43,139 @@ Person B builds their entire UI against this hardcoded shape. You make sure your
 
 ---
 
-## Phase 1 — Setup + First Working Call (Hour 0–4) ✅ COMPLETE
+## Phase 1 — Setup + First Working Call (Hour 0–4)
 
 **Goal:** AAPL scrape → Bull Agent verdict printed in terminal. One working end-to-end call.
 
 ### Tasks
 
-- [x] Create GitHub repo + Node.js project structure
+- [ ] Create GitHub repo + Node.js project structure
   - Folders: `/backend/agents`, `/backend/scraper`, `/backend/db`
-  - `.env` filled with all real keys — `.env.example` shared with Person B
-  - Branch: `backend` pushed to `bolishettyrahul/AGENT_IITH`
+  - Create `.env` with keys: `BRIGHTDATA_KEY`, `FEATHERLESS_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`
+  - Share `.env.example` with Person B (no real values)
 
-- [x] Create Supabase project + signals table
-  - Schema in `backend/db/schema.sql` — run in Supabase SQL Editor
-  - `saveSignal()` helper in `backend/db/supabase.js`
+- [ ] Create Supabase project + signals table
+  - Table: `signals (id, ticker, agent, verdict, confidence, reasons jsonb, created_at)`
+  - Free tier is enough for the hackathon
+  - Save URL + anon key to `.env`
 
-- [x] Scraper — Yahoo Finance JSON API (primary) + Bright Data Browser API fallback
-  - Primary: `query1/query2.finance.yahoo.com` — clean JSON, no credits, no JS rendering needed
-  - Fallback: Bright Data Scraping Browser via `puppeteer-core` + `BROWSER_WS`
-  - Fixed bugs: `Promise.allSettled` + `Number()` cast on `toFixed()`
+- [ ] Bright Data — test one scrape on Yahoo Finance
+  - Use promo code `hack100` for free credits
+  - Scrape Yahoo Finance news page for AAPL
+  - Log raw text to console — if headlines come back, you're done
+  - Don't over-engineer parsing yet
 
-- [x] Featherless.ai — model confirmed working
-  - Model: `Qwen/Qwen2.5-72B-Instruct`
-  - JSON retry logic in `backend/agents/llm.js` — retries once with stricter prompt on parse fail
+- [ ] Featherless.ai — test one LLM call
+  - Send a simple prompt and confirm a response comes back
+  - Note the latency — important for demo timing expectations
+  - Confirm the API key works and you know the model name to use
 
-- [x] Bull Agent prompt — confirmed clean JSON output
-  - Tested AAPL end-to-end in terminal
+- [ ] Write Bull Agent prompt — confirm clean JSON output
+  - System prompt: `"You are a Bull analyst. Your sole goal is to find every reason to BUY. Return ONLY valid JSON: { verdict, confidence, reasons[3] }. No explanation. No preamble."`
+  - Test 3 times — JSON must be clean and parseable every single time
+  - If it returns text outside the JSON even once — tighten the prompt
 
-- [x] **Milestone complete** — committed `"Phase 1 milestone: AAPL scrape → Bull Agent JSON working"`
+- [ ] **Milestone:** Run AAPL end-to-end in terminal
+  - `AAPL → scrape Yahoo Finance → pass raw text to Bull Agent → print JSON to terminal`
+  - This single working call means Phase 1 is done
+  - Commit immediately: `"Phase 1 milestone: AAPL scrape → Bull Agent JSON working"`
+
+### Phase 1 is done when
+Terminal prints `{ agent: "bull", verdict: "BUY", confidence: 74, reasons: [...] }` for AAPL using live scraped data.
 
 ---
 
-## Phase 2 — All 4 Agents + Full Pipeline (Hour 4–10) ✅ COMPLETE
+## Phase 2 — All 4 Agents + Full Pipeline (Hour 4–10)
 
 **Goal:** All 3 agents run in parallel → Mediator resolves conflict → full decision saved to Supabase → WebSocket server emitting results.
 
-> **Prompt decision:** All 4 prompts reviewed, approved, and locked. `{ticker}` bug fixed — ticker is injected via user prompt only, not system prompt.
+> **Hour 4 check-in (10 min):** Show Person B your terminal output. B shows you the dummy UI. Confirm your JSON shape matches exactly what B hardcoded. Fix any drift now — not at Hour 10.
 
-### Approved Prompts (locked — do not change without re-testing JSON output)
+### The 4 Agents
 
-#### Bull
+| Agent | Mandate | Key difference from Bull |
+|---|---|---|
+| Bull | Find every reason to BUY. Never say SELL. | Already done in Phase 1 |
+| Bear | Find every reason to SELL. Never say BUY. | Change mandate line only — same schema |
+| Risk | Minimize exposure. Bias toward HOLD always. | Change mandate line only — same schema |
+| Mediator | Receive all 3, resolve conflict, produce final decision | Different prompt + different output schema |
+
+### Bear + Risk Prompt Pattern
+
+Copy the Bull prompt. Change only the mandate line:
+
+- **Bear:** `"Your sole goal is to find every downside risk and reason the stock will fall."`
+- **Risk:** `"Your sole goal is to protect against loss. When uncertain, always recommend HOLD."`
+
+Everything else — output schema, JSON rules, no-preamble rule — stays identical.
+
+### Mediator Prompt Structure
+
 ```
-You are a Bull analyst.
-Your sole goal is to find the strongest possible case for buying this stock.
-Even if the overall news is mixed or negative, identify the best bullish signals available.
-Extract specific numbers, percentages, earnings beats, analyst upgrades, and named catalysts.
-Vague reasons like "revenue is up" are not acceptable — cite exact figures.
-If fewer than 3 strong bullish signals exist, include the weakest available but mark low confidence.
-Return ONLY valid JSON:
-{ "verdict": "BUY", "confidence": <0-100>, "reasons": ["<specific with number/event>", "<specific>", "<specific>"] }
-No explanation. No preamble. Nothing outside the JSON.
-```
+You are a senior investment strategist.
+You receive 3 analyst reports with conflicting verdicts.
+Your job: resolve the conflict and produce ONE final decision.
 
-#### Bear
-```
-You are a Bear analyst.
-Your sole goal is to find the strongest possible case for selling this stock.
-Even if the overall news is positive, identify the most significant downside risks available.
-Focus exclusively on: earnings misses, analyst downgrades, insider selling, macro headwinds,
-regulatory risks, valuation concerns, and competitive threats.
-Extract specific numbers, percentages, dates, and named risk events.
-Do not reference any positive signals — they are outside your mandate.
-If fewer than 3 strong bearish signals exist, include the weakest available but mark low confidence.
-Return ONLY valid JSON:
-{ "verdict": "SELL", "confidence": <0-100>, "reasons": ["<specific with number/event>", "<specific>", "<specific>"] }
-No explanation. No preamble. Nothing outside the JSON.
-```
+Rules:
+- You MUST acknowledge which agents disagree and why
+- Weight confidence scores — higher confidence = more influence  
+- If all 3 conflict equally: default to HOLD
+- Always include a conditional trigger (e.g. "BUY if X happens")
+- Return ONLY valid JSON. No prose outside the JSON.
 
-#### Risk
-```
-You are a Risk analyst.
-Your sole goal is to protect capital and minimize exposure.
-You are strongly biased toward HOLD. Only deviate if the evidence is overwhelming:
-- Deviate to BUY only if volatility is very low AND Bull signals are unusually strong
-- Deviate to SELL only if there is an imminent, specific, dated risk event with high probability
-Default behavior when uncertain: always return HOLD.
-Flag: volatility indexes, upcoming earnings dates, Fed decisions, geopolitical exposure,
-options skew, and any events within the next 30 days that could move the stock significantly.
-Extract specific numbers, dates, and named risk events from the news.
-Return ONLY valid JSON:
-{ "verdict": "<HOLD|BUY|SELL>", "confidence": <0-100>, "reasons": ["<specific with number/event>", "<specific>", "<specific>"] }
-No explanation. No preamble. Nothing outside the JSON.
-```
-
-#### Mediator
-```
-You are a senior investment strategist at a hedge fund.
-You receive 3 independent analyst reports with potentially conflicting verdicts.
-Your job: synthesize them into ONE final, defensible decision.
-
-Weighting rules:
-- Higher confidence score = more influence on the final decision
-- 2-vs-1 majority wins ONLY if the majority's average confidence exceeds the dissenter's by 15+ points
-- If all 3 disagree with confidence within 10 points of each other: default to HOLD
-- Risk Agent's HOLD recommendation adds 10 points of resistance against BUY or SELL decisions
-
-Conflict score rules (use exactly these):
-- HIGH: all 3 agents have different verdicts OR two agents disagree with confidence gap < 15
-- MEDIUM: 2-vs-1 split with confidence gap between 15-30 points
-- LOW: 2-vs-1 split with confidence gap > 30 points OR all 3 agree
-
-Trigger rules:
-- BUY trigger: must include a specific price level or catalyst event
-- SELL trigger: must include a specific condition
-- HOLD trigger: must include what would change the recommendation
-
-Return ONLY valid JSON — no text outside the object:
-{
-  "decision": "<BUY|SELL|HOLD>",
-  "confidence": <0-100>,
-  "conflict_score": "<LOW|MEDIUM|HIGH>",
-  "trigger": "<specific conditional with price, date, or event>",
-  "rationale": "<2-3 sentences: name which agents you sided with, cite their specific reasons, explain why you outweighed the dissenter>"
-}
+Output schema:
+{ "decision": "BUY|SELL|HOLD", "confidence": 0-100,
+  "conflict_score": "LOW|MEDIUM|HIGH",
+  "trigger": "string", "rationale": "string" }
 ```
 
 ### WebSocket Event Flow
 
+This is the sequence you implement — emit each result as soon as it resolves, not all at once at the end:
+
 ```
 1. Client sends:   POST /analyze with { ticker: "AAPL" }
-2. Server:         Scrape → start all 3 agents in parallel (Promise.all)
+2. You:            Scrape + start all 3 agents in parallel (Promise.all)
 3. Bull finishes → emit { agent: "bull", verdict, confidence, reasons }
 4. Bear finishes → emit { agent: "bear", verdict, confidence, reasons }
 5. Risk finishes → emit { agent: "risk", verdict, confidence, reasons }
 6. Mediator runs → emit { decision, conflict_score, trigger, rationale }
 ```
 
-> Emit each agent the moment it resolves — NOT after all 3 finish. This is the live "agents deliberating" visual.
+> The parallel emit (not waiting for all 3) is what creates the live "agents deliberating" visual in Person B's UI. This is your demo's best moment.
 
 ### Tasks
 
-- [x] Bull Agent prompt — approved and locked
-- [x] Bear Agent prompt — update with approved prompt, test 3× clean JSON
-- [x] Risk Agent prompt — update with approved prompt, test 3× clean JSON
-- [x] Mediator prompt — update with approved prompt, test hardcoded inputs:
-  - Test 1: bull=BUY/80, bear=SELL/75, risk=HOLD/60 → expect `conflict_score: "HIGH"`
-  - Test 2: bull=BUY/85, bear=HOLD/40, risk=HOLD/55 → expect `conflict_score: "LOW"`
-- [x] Wire all 3 agents in parallel — `Promise.allSettled()` in `server.js` runPipeline()
-- [x] Save all outputs to Supabase — one row per agent + one row for mediator
-- [x] WebSocket server emits per-agent as each resolves
-- [x] CORS confirmed for Person B's Vercel domain — `*.vercel.app` regex + `CORS_ORIGIN` env override
-- [x] **Milestone:** AAPL + TSLA both produce different outputs end-to-end
+- [ ] Write Bear + Risk agent prompts — same JSON schema, different mandate
+  - Test each independently before combining
+  - JSON must be clean and parseable every single time
+
+- [ ] Run all 3 agents in parallel using `Promise.all()`
+  - Pass the same scraped news text to all 3 simultaneously
+  - Do NOT run them sequentially — parallel is faster and enables the live UI effect
+
+- [ ] Write Mediator prompt — test with hardcoded conflicting inputs
+  - Test 1: bull=BUY, bear=SELL, risk=HOLD → should get `conflict_score: "HIGH"`
+  - Test 2: bull=BUY, bear=HOLD, risk=HOLD → should get `conflict_score: "LOW"`
+  - Both must return clean parseable JSON
+
+- [ ] Save all agent outputs to Supabase
+  - After each agent finishes → insert a row into `signals` table
+  - After mediator finishes → insert the final decision row
+  - This creates the audit trail judges look for under "Use of Data" criterion
+
+- [ ] Build WebSocket server — emit agent results as they finish
+  - Emit each agent result immediately when it resolves (not after all 3 are done)
+  - Final mediator result emitted after all 3 agents complete
+
+- [ ] Expose `POST /analyze` endpoint
+  - Accepts `{ ticker: "AAPL" }`
+  - Returns `200` immediately, then pushes results via WebSocket as they arrive
+  - Confirm CORS is enabled for localhost and Person B's Vercel domain
+
+- [ ] **Milestone:** Test full pipeline — AAPL + TSLA both working
+  - Run AAPL → get full 4-agent decision
+  - Run TSLA → get completely different outputs
   - Commit: `"Full 4-agent pipeline working — AAPL and TSLA tested"`
 
 ---
