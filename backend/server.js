@@ -53,39 +53,62 @@ app.post('/analyze', async (req, res) => {
 async function runPipeline(ticker, persona) {
   console.log(`[Pipeline] Starting analysis for ${ticker} [Persona: ${persona}]`);
 
-  // Step 1 — Scrape
-  let newsText;
+  // Step 1 — Scrape (now returns { newsText, articles })
+  let newsText, articles;
   try {
-    newsText = await scrapeYahooFinance(ticker);
-    console.log(`[Scraper] Got ${newsText.length} chars for ${ticker}`);
+    const scraperResult = await scrapeYahooFinance(ticker);
+    newsText = scraperResult.newsText;
+    articles = scraperResult.articles;
+    console.log(`[Scraper] Got ${newsText.length} chars, ${articles.length} articles for ${ticker}`);
   } catch (err) {
     broadcast({ error: `No data found for ticker: ${ticker}`, ticker });
     return;
   }
+
+  // Broadcast source articles so frontend knows about them before agents finish
+  broadcast({ type: 'sources', ticker, articles });
 
   // Step 2 — Run all 3 agents in parallel, emit each as it resolves
   // allSettled: one agent failing won't kill the others or block the mediator
   const agentResults = {};
 
   await Promise.allSettled([
-    runBullAgent(ticker, newsText).then((result) => {
+    runBullAgent(ticker, newsText, articles).then((result) => {
       agentResults.bull = result;
       broadcast(result);
-      saveSignal({ ticker, agent: result.agent, verdict: result.verdict, confidence: result.confidence, reasons: result.reasons });
+      saveSignal({
+        ticker,
+        agent: result.agent,
+        verdict: result.verdict,
+        confidence: result.confidence,
+        reasons: result.reasons,
+      });
       console.log('[Bull]', JSON.stringify(result));
     }).catch((err) => console.error('[Bull failed]', err.message)),
 
-    runBearAgent(ticker, newsText).then((result) => {
+    runBearAgent(ticker, newsText, articles).then((result) => {
       agentResults.bear = result;
       broadcast(result);
-      saveSignal({ ticker, agent: result.agent, verdict: result.verdict, confidence: result.confidence, reasons: result.reasons });
+      saveSignal({
+        ticker,
+        agent: result.agent,
+        verdict: result.verdict,
+        confidence: result.confidence,
+        reasons: result.reasons,
+      });
       console.log('[Bear]', JSON.stringify(result));
     }).catch((err) => console.error('[Bear failed]', err.message)),
 
-    runRiskAgent(ticker, newsText).then((result) => {
+    runRiskAgent(ticker, newsText, articles).then((result) => {
       agentResults.risk = result;
       broadcast(result);
-      saveSignal({ ticker, agent: result.agent, verdict: result.verdict, confidence: result.confidence, reasons: result.reasons });
+      saveSignal({
+        ticker,
+        agent: result.agent,
+        verdict: result.verdict,
+        confidence: result.confidence,
+        reasons: result.reasons,
+      });
       console.log('[Risk]', JSON.stringify(result));
     }).catch((err) => console.error('[Risk failed]', err.message)),
   ]);

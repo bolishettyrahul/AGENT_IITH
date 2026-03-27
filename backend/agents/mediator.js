@@ -102,16 +102,20 @@ Return ONLY valid JSON — no text outside the object:
 async function runMediatorAgent(bullResult, bearResult, riskResult, personaId = 'balanced') {
   const SYSTEM_PROMPT = PERSONAS[personaId] || PERSONAS.balanced;
   
+  // Extract reason text from the new structured format { text, sources, weight }
+  const extractReasonTexts = (reasons) =>
+    (reasons || []).map(r => typeof r === 'string' ? r : r.text).join(' | ');
+
   const userPrompt = `Analyst Reports:
 
 Bull Agent: verdict=${bullResult.verdict}, confidence=${bullResult.confidence}
-Reasons: ${bullResult.reasons.join(' | ')}
+Reasons: ${extractReasonTexts(bullResult.reasons)}
 
 Bear Agent: verdict=${bearResult.verdict}, confidence=${bearResult.confidence}
-Reasons: ${bearResult.reasons.join(' | ')}
+Reasons: ${extractReasonTexts(bearResult.reasons)}
 
 Risk Agent: verdict=${riskResult.verdict}, confidence=${riskResult.confidence}
-Reasons: ${riskResult.reasons.join(' | ')}
+Reasons: ${extractReasonTexts(riskResult.reasons)}
 
 Apply your weighting rules and produce the final decision.`;
 
