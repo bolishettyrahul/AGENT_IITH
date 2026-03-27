@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "bright-data-best-practices": {
+      "source": "brightdata/skills",
+      "sourceType": "github",
+      "computedHash": "ba3258df8265b5d06cb19dddb81fa8066d1b75f1f1bf1e938e0b010b79f5784b"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "computedHash": "645b891da1edbae76ab79c7b088d4e73397464f8396edaf773c0e01971ce75d6"
+    },
+    "multi-agent-orchestration": {
+      "source": "qodex-ai/ai-agent-skills",
+      "sourceType": "github",
+      "computedHash": "d50072e06e7180468a91e8985827f64ad05f090a6dd435f5c51813b4e9417b69"
+    },
+    "nodejs-backend-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "3d6cbc12f720d8f02e1936c3e7fab78245eaa69500edbceea93d493d4ece6094"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "e3ba3d760c5f4cc43b02a91fb8924f726c7818f95cc35d79d0a606ca622b72f5"
+    },
+    "websocket-engineer": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "computedHash": "a90c56583db692bd98e0d1e1210a54b0427923970965676c6fe86101261c9ece"
+    }
+  }
+}
