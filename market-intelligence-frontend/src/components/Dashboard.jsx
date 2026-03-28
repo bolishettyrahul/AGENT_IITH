@@ -1,14 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink, Bell } from 'lucide-react';
 import DebateSection from './DebateSection';
+import { HTTP_URL, WS_URL } from '../config';
 
-export default function Dashboard({ onHome }) {
+const AGENT_TITLES = {
+  bull: { title: 'GROWTH OPPORTUNITY ANALYST', color: '#6aab8e', icon: '📈' },
+  bear: { title: 'DOWNSIDE RISK ANALYST', color: '#b87a7a', icon: '📉' },
+  risk: { title: 'VOLATILITY OFFICER', color: '#c9a050', icon: '⚠️' },
+  mediator: { title: 'CHIEF INVESTMENT OFFICER', color: '#8480b8', icon: '🎯' },
+};
+
+export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], targetTicker = '' }) {
   const [tickerInput, setTickerInput] = useState("");
+
+  useEffect(() => {
+    if (targetTicker) setTickerInput(targetTicker);
+  }, [targetTicker]);
+
   const [persona, setPersona] = useState("balanced");
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [errorState, setErrorState] = useState(null);
   const [userResponse, setUserResponse] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [analysisId, setAnalysisId] = useState(0);
   const [chatLogs, setChatLogs] = useState([]);
   const [sourceArticles, setSourceArticles] = useState([]);
   
@@ -28,9 +43,11 @@ export default function Dashboard({ onHome }) {
 
   useEffect(() => {
     let reconnectTimer;
+    let backoff = 1000;
+    const MAX_BACKOFF = 30000;
     const connectWS = () => {
-      const socket = new WebSocket("ws://localhost:3001");
-      socket.onopen = () => { setWsConnected(true); setErrorState(null); };
+      const socket = new WebSocket(WS_URL);
+      socket.onopen = () => { backoff = 1000; setWsConnected(true); setErrorState(null); };
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -64,11 +81,12 @@ export default function Dashboard({ onHome }) {
       };
       socket.onclose = () => {
         setWsConnected(false);
-        reconnectTimer = setTimeout(connectWS, 3000);
+        reconnectTimer = setTimeout(() => {
+          backoff = Math.min(backoff * 2, MAX_BACKOFF);
+          connectWS();
+        }, backoff);
       };
-      socket.onerror = (err) => {
-        // We will mock silently if it fails, but track it
-      };
+      socket.onerror = () => {};
       wsRef.current = socket;
     };
 
@@ -200,9 +218,16 @@ export default function Dashboard({ onHome }) {
   };
 
   const handleAnalyze = async () => {
-    if (!tickerInput.trim() || loading) return;
+    const ticker = tickerInput.trim().toUpperCase();
+    if (!ticker || loading) return;
+    if (!/^[A-Z0-9.^-]{1,10}$/.test(ticker)) {
+      setErrorState('Invalid ticker symbol. Use 1–10 characters (e.g. AAPL, BRK.B).');
+      return;
+    }
+    setAnalysisId(prev => prev + 1);
     setLoading(true);
     setErrorState(null);
+    setChatLogs([]);
     setSourceArticles([]);
     setResults({ bull: null, bear: null, risk: null, mediator: null });
     setIsDebating(false);
@@ -211,10 +236,10 @@ export default function Dashboard({ onHome }) {
     setDebateComplete(null);
 
     try {
-      const res = await fetch("http://localhost:3001/analyze", {
+      const res = await fetch(`${HTTP_URL}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: tickerInput.toUpperCase().trim(), persona })
+        body: JSON.stringify({ ticker, persona })
       });
       if (!res.ok) throw new Error("Backend API returned " + res.status);
     } catch (err) {
@@ -228,16 +253,50 @@ export default function Dashboard({ onHome }) {
     if (e.key === 'Enter') handleAnalyze();
   };
 
-  const handleSendResponse = () => {
-    if (!userResponse.trim()) return;
-    setChatLogs([...chatLogs, { sender: 'You', text: userResponse }]);
+  const handleSendResponse = async () => {
+    const message = userResponse.trim();
+    if (!message || chatLoading) return;
+    setChatLogs(prev => [...prev, { sender: 'You', text: message }]);
     setUserResponse('');
-    setTimeout(() => {
-      setChatLogs(prev => [...prev, { 
-        sender: 'Mediator', 
-        text: "Parameters adjusted. Monitoring data feeds with new constraints..." 
-      }]);
-    }, 1500);
+    setChatLoading(true);
+    try {
+      const res = await fetch(`${HTTP_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: tickerInput.toUpperCase().trim(),
+          message,
+          agentResults: results,
+          persona,
+        }),
+      });
+      const data = await res.json();
+      setChatLogs(prev => [...prev, { sender: 'Mediator', text: data.response || 'No response.' }]);
+    } catch {
+      setChatLogs(prev => [...prev, { sender: 'Mediator', text: 'Unable to process your constraint at this time.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleTrackStock = async () => {
+    try {
+       await fetch(`${HTTP_URL}/track`, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ 
+           ticker: tickerInput.toUpperCase().trim(),
+           verdict: results.mediator?.decision,
+           confidence: results.mediator?.confidence,
+           rationale: results.mediator?.rationale,
+           trigger: results.mediator?.trigger,
+           sources: sourceArticles
+         })
+       });
+       onViewTracked(); // Switch view
+    } catch (e) {
+       console.error(e);
+    }
   };
 
   // Resolve a source ID to its article object
@@ -245,17 +304,9 @@ export default function Dashboard({ onHome }) {
     return sourceArticles.find(a => a.id === sourceId);
   };
 
-  // Weight badge colors
-  const getWeightColor = (weight) => {
-    const w = (weight || '').toUpperCase();
-    if (w === 'HIGH') return '#ef4444';
-    if (w === 'MEDIUM') return '#f59e0b';
-    if (w === 'LOW') return '#6b7280';
-    return '#888';
-  };
-
-  const AgentColumn = ({ title, agentKey }) => {
+  const AgentColumn = ({ agentKey }) => {
     const data = results[agentKey];
+    const config = AGENT_TITLES[agentKey];
     const [expandedReasons, setExpandedReasons] = useState({});
     const [showAllSources, setShowAllSources] = useState(false);
 
@@ -266,8 +317,11 @@ export default function Dashboard({ onHome }) {
     if (!data) {
       // Skeleton Loading State
       return (
-        <div className="base-card agent-column" data-agent={agentKey} style={{ opacity: 0.7 }}>
-          <h4 className="agent-title" style={{color: '#555'}}>{title}</h4>
+        <div className="base-card agent-column" data-agent={agentKey} style={{ opacity: 0.7, borderLeft: `4px solid ${config.color}` }}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem'}}>
+            <span style={{fontSize: '1.25rem'}}>{config.icon}</span>
+            <h4 className="agent-title" style={{color: '#555', margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>{config.title}</h4>
+          </div>
           <div className="skeleton-line" style={{width: '60%', height: '24px', marginBottom: '1.5rem'}}></div>
           <div className="skeleton-line" style={{width: '100%'}}></div>
           <div className="skeleton-line" style={{width: '90%'}}></div>
@@ -282,11 +336,27 @@ export default function Dashboard({ onHome }) {
     )];
 
     return (
-      <div className="base-card agent-column agent-arrive-anim" data-agent={agentKey}>
-        <h4 className="agent-title">{title}</h4>
+      <div className="base-card agent-column agent-arrive-anim" data-agent={agentKey} style={{ borderLeft: `4px solid ${config.color}` }}>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+            <span style={{fontSize: '1.5rem'}}>{config.icon}</span>
+            <h4 className="agent-title" style={{color: config.color, margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>{config.title}</h4>
+          </div>
+        </div>
         <div className="agent-verdict-row">
-          <span className="verdict-chip">{data.verdict}</span>
-          <span className="agent-conf-text">{data.confidence}% CONFIDENCE</span>
+          <span className="verdict-chip" style={{
+            backgroundColor: config.color,
+            border: `2px solid ${config.color}`,
+            color: '#0a0a0a',
+            fontWeight: 900,
+            fontSize: '1rem',
+            boxShadow: `0 0 16px ${config.color}33`
+          }}>
+            {data.verdict}
+          </span>
+          <span className="agent-conf-text" style={{color: config.color, fontWeight: 600}}>
+            {data.confidence}% CONVICTION
+          </span>
         </div>
         
         {/* Attributed Reasons */}
@@ -400,9 +470,9 @@ export default function Dashboard({ onHome }) {
   const getConflictColor = (score) => {
     if (!score) return '#ffffff';
     const s = score.toUpperCase();
-    if (s === 'HIGH') return '#ef4444'; // Red
-    if (s === 'MEDIUM') return '#f59e0b'; // Amber
-    if (s === 'LOW') return '#10b981'; // Green
+    if (s === 'HIGH') return '#b87a7a'; // Red
+    if (s === 'MEDIUM') return '#c9a050'; // Amber
+    if (s === 'LOW') return '#6aab8e'; // Green
     return '#ffffff';
   };
 
@@ -414,13 +484,21 @@ export default function Dashboard({ onHome }) {
         <div className="navbar-brand" onClick={onHome} style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
           <ArrowLeft size={16}/> MARKET.INTEL
         </div>
-        <div className="navbar-status">
+        <div className="navbar-status" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button
+            className="status-indicator"
+            onClick={onViewTracked}
+            style={{ cursor: 'pointer', background: 'transparent', border: '1px solid var(--border-color)', color: '#6aab8e', fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.08em' }}
+          >
+            <Bell size={12} style={{ display: 'inline-block', marginRight: '4px', marginBottom: '-2px' }} />
+            TRACKED ({trackedStocks.length})
+          </button>
           {loading ? (
             <span className="status-indicator loading">DELIBERATING</span>
           ) : wsConnected ? (
             <span className="status-indicator online">SYSTEM READY</span>
           ) : (
-            <span className="status-indicator loading">CONNECTING...</span>
+            <span className="status-indicator" style={{ color: '#c9a050', borderColor: 'rgba(245, 158, 11, 0.3)' }}>WS OFFLINE</span>
           )}
         </div>
       </nav>
@@ -429,9 +507,16 @@ export default function Dashboard({ onHome }) {
         
         {/* Error Banner */}
         {errorState && (
-          <div className="anim-stagger-1" style={{backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '1rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem'}}>
+          <div className="anim-stagger-1" style={{backgroundColor: 'rgba(184, 122, 122, 0.1)', border: '1px solid rgba(184, 122, 122, 0.3)', color: '#c49898', padding: '1rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem'}}>
             <AlertCircle size={18} />
             {errorState}
+          </div>
+        )}
+
+        {!wsConnected && !loading && (
+          <div className="anim-stagger-1" style={{backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#fbbf24', padding: '0.75rem 1.25rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem'}}>
+            <AlertCircle size={16} />
+            WebSocket offline — analysis can still be triggered but live streaming updates may not appear until reconnection.
           </div>
         )}
 
@@ -459,11 +544,11 @@ export default function Dashboard({ onHome }) {
               onChange={e => setPersona(e.target.value)}
             >
               <option style={{background: '#0a0a0a', color: '#fff'}} value="balanced">BALANCED TRADER</option>
-              <option style={{background: '#0a0a0a', color: '#ef4444'}} value="aggressive">AGGRESSIVE TRADER</option>
-              <option style={{background: '#0a0a0a', color: '#10b981'}} value="conservative">CONSERVATIVE TRADER</option>
+              <option style={{background: '#0a0a0a', color: '#b87a7a'}} value="aggressive">AGGRESSIVE TRADER</option>
+              <option style={{background: '#0a0a0a', color: '#6aab8e'}} value="conservative">CONSERVATIVE TRADER</option>
             </select>
           </div>
-          <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim() || !wsConnected} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
+          <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim()} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
             {loading ? 'ANALYZING...' : 'ANALYZE'}
           </button>
         </div>
@@ -494,9 +579,9 @@ export default function Dashboard({ onHome }) {
         </div>
 
         <div className="agents-grid">
-          <AgentColumn title="BULL AGENT" agentKey="bull" />
-          <AgentColumn title="BEAR AGENT" agentKey="bear" />
-          <AgentColumn title="RISK AGENT" agentKey="risk" />
+          <AgentColumn agentKey="bull" />
+          <AgentColumn agentKey="bear" />
+          <AgentColumn agentKey="risk" />
         </div>
 
         <DebateSection
@@ -510,7 +595,13 @@ export default function Dashboard({ onHome }) {
 
         {results.mediator ? (
           <div>
-            <div className="base-card decision-wrap agent-arrive-anim">
+            <div className="base-card decision-wrap agent-arrive-anim" style={{ borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem'}}>
+                <span style={{fontSize: '1.75rem'}}>{AGENT_TITLES.mediator.icon}</span>
+                <h3 style={{color: AGENT_TITLES.mediator.color, margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>
+                  {AGENT_TITLES.mediator.title}
+                </h3>
+              </div>
               <div className="decision-header">
                 <div className="decision-title">
                   {tickerInput.toUpperCase()} <span>→ {results.mediator.decision}</span>
@@ -533,20 +624,40 @@ export default function Dashboard({ onHome }) {
                   </span>
                 )}
               </div>
+
+              {!trackedStocks.find(s => s.ticker === tickerInput.toUpperCase().trim()) && (
+                <div style={{ marginTop: '2rem' }}>
+                  <button className="btn-primary" onClick={handleTrackStock} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#6aab8e', border: '1px solid #6aab8e' }}>
+                    <Bell size={16} style={{ display: 'inline', marginRight: '0.5rem', marginBottom: '-2px' }} />
+                    TRACK STOCK VIRTUALLY
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Interactive User Response Field */}
-            <div className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem' }}>
-              <h4 style={{fontSize: '0.875rem', fontWeight: 800, marginBottom: '1.5rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em'}}>
-                Adjust Agent Constraints & Respond
-              </h4>
+            {/* Interactive CIO Response Field */}
+            <div key={analysisId} className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem', borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem'}}>
+                <span style={{fontSize: '1.25rem'}}>{AGENT_TITLES.mediator.icon}</span>
+                <h4 style={{fontSize: '0.75rem', fontWeight: 800, margin: 0, color: AGENT_TITLES.mediator.color, textTransform: 'uppercase', letterSpacing: '0.05em'}}>
+                  {AGENT_TITLES.mediator.title} Constraint Analysis
+                </h4>
+              </div>
               
               {chatLogs.length > 0 && (
                 <div style={{marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem'}}>
                   {chatLogs.map((log, idx) => (
-                    <div key={idx} style={{fontSize: '0.875rem', color: log.sender === 'You' ? '#ccc' : '#fff'}}>
-                      <strong style={{color: '#888', marginRight: '0.5rem'}}>{log.sender}:</strong>
-                      {log.text}
+                    <div key={idx} style={{
+                      fontSize: '0.875rem',
+                      padding: '1rem',
+                      borderRadius: '0.5rem',
+                      backgroundColor: log.sender === 'You' ? 'rgba(139, 92, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                      borderLeft: `3px solid ${log.sender === 'You' ? '#8480b8' : AGENT_TITLES.mediator.color}`
+                    }}>
+                      <strong style={{color: log.sender === 'You' ? '#c4b5fd' : AGENT_TITLES.mediator.color, marginRight: '0.5rem'}}>
+                        {log.sender === 'You' ? '👤 You' : `${AGENT_TITLES.mediator.icon} ${AGENT_TITLES.mediator.title}`}:
+                      </strong>
+                      <span style={{color: log.sender === 'You' ? '#d1d5db' : '#e0e7ff'}}>{log.text}</span>
                     </div>
                   ))}
                 </div>
@@ -562,8 +673,8 @@ export default function Dashboard({ onHome }) {
                   onChange={e => setUserResponse(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSendResponse()}
                 />
-                <button className="btn-primary" onClick={handleSendResponse} style={{padding: '1rem 2.5rem', fontSize: '1rem'}}>
-                  SEND
+                <button className="btn-primary" onClick={handleSendResponse} disabled={chatLoading} style={{padding: '1rem 2.5rem', fontSize: '1rem'}}>
+                  {chatLoading ? 'SENDING...' : 'SEND'}
                 </button>
               </div>
             </div>

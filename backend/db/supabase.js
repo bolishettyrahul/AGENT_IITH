@@ -17,7 +17,7 @@ async function saveDebateTurn(data) {
     ticker: data.ticker,
     verdict: data.turn_type,
     confidence: data.confidence_after,
-    reasons: JSON.stringify({
+    reasons: {
       round: data.round,
       turn_type: data.turn_type,
       summary: data.summary,
@@ -25,7 +25,7 @@ async function saveDebateTurn(data) {
       confidence_before: data.confidence_before,
       confidence_after: data.confidence_after,
       tier_win: data.tier_win,
-    }),
+    },
   };
   const { error } = await supabase.from('signals').insert(row);
   if (error) console.error('[Supabase] Debate turn insert error:', error.message);
@@ -37,16 +37,80 @@ async function saveDebateSummary(data) {
     ticker: data.ticker,
     verdict: data.debate_winner,
     confidence: null,
-    reasons: JSON.stringify({
+    reasons: {
       rounds_run: data.roundsRun,
       convergence_achieved: data.convergenceAchieved,
       debate_winner: data.debateWinner,
       final_confidences: data.finalConfidences,
       kelly_weights: data.kellyWeights,
-    }),
+    },
   };
   const { error } = await supabase.from('signals').insert(row);
   if (error) console.error('[Supabase] Debate summary insert error:', error.message);
 }
 
-module.exports = { supabase, saveSignal, saveDebateTurn, saveDebateSummary };
+async function loadTrackedStocks() {
+  const { data, error } = await supabase
+    .from('tracked_stocks')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.error('[Supabase] Load tracked stocks error:', error.message);
+    return [];
+  }
+  return data || [];
+}
+
+async function upsertTrackedStock(stock) {
+  const { error } = await supabase.from('tracked_stocks').upsert(
+    {
+      ticker: stock.ticker,
+      verdict: stock.verdict,
+      confidence: stock.confidence,
+      rationale: stock.rationale,
+      trigger: stock.trigger,
+      price: stock.price,
+      change_pct: stock.change,
+      sources: stock.sources || [],
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'ticker' }
+  );
+  if (error) console.error('[Supabase] Upsert tracked stock error:', error.message);
+}
+
+async function removeTrackedStock(ticker) {
+  const { error } = await supabase.from('tracked_stocks').delete().eq('ticker', ticker);
+  if (error) console.error('[Supabase] Remove tracked stock error:', error.message);
+}
+
+async function saveChatMessage({ ticker, role, content }) {
+  const { error } = await supabase.from('chat_sessions').insert({ ticker, role, content });
+  if (error) console.error('[Supabase] Save chat message error:', error.message);
+}
+
+async function getChatHistory(ticker, limit = 6) {
+  const { data, error } = await supabase
+    .from('chat_sessions')
+    .select('role, content')
+    .eq('ticker', ticker)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('[Supabase] Get chat history error:', error.message);
+    return [];
+  }
+  return (data || []).reverse(); // oldest-first for LLM context
+}
+
+module.exports = {
+  supabase,
+  saveSignal,
+  saveDebateTurn,
+  saveDebateSummary,
+  loadTrackedStocks,
+  upsertTrackedStock,
+  removeTrackedStock,
+  saveChatMessage,
+  getChatHistory,
+};

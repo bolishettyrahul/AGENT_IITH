@@ -77,7 +77,7 @@ async function runMediatorAgent(bullResult, bearResult, riskResult, personaId = 
   const SYSTEM_PROMPT = PERSONAS[personaId] || PERSONAS.balanced;
 
   const extractReasonTexts = (reasons) =>
-    (reasons || []).map((r) => (typeof r === 'string' ? r : r.text)).join(' | ');
+    (reasons || []).map((r, i) => `  ${i + 1}. ${typeof r === 'string' ? r : r.text}`).join('\n');
 
   // Base agent summary using debate-adjusted confidences when available
   const bullConf = debateContext?.finalConfidences?.bull ?? bullResult.confidence;
@@ -89,29 +89,36 @@ async function runMediatorAgent(bullResult, bearResult, riskResult, personaId = 
     const kw = debateContext.kellyWeights;
     const algo = debateContext.financeAlgorithms;
     weightSection = `
-DEBATE-INFORMED WEIGHTS (Kelly Criterion — override persona defaults):
-  Bull weight: ${(kw.bull * 100).toFixed(1)}%
-  Bear weight: ${(kw.bear * 100).toFixed(1)}%
-  Risk weight:  ${(kw.risk * 100).toFixed(1)}%
+=== DEBATE-INFORMED WEIGHTS ===
+Kelly Criterion — override persona defaults:
+  - Bull weight: ${(kw.bull * 100).toFixed(1)}%
+  - Bear weight: ${(kw.bear * 100).toFixed(1)}%
+  - Risk weight: ${(kw.risk * 100).toFixed(1)}%
 
 Debate result: ${debateContext.debateWinner.toUpperCase()} won the debate after ${debateContext.roundsRun} round(s). Convergence: ${debateContext.convergenceAchieved ? 'YES' : 'NO'}.
-Delphi confidence adjustments — Bull net change: ${algo?.delphi_method?.bull_net_change ?? 0}, Bear net change: ${algo?.delphi_method?.bear_net_change ?? 0}
+Delphi confidence adjustments: Bull net change: ${algo?.delphi_method?.bull_net_change ?? 0}, Bear net change: ${algo?.delphi_method?.bear_net_change ?? 0}
 
 Apply these Kelly weights to each agent's argument strength. The debate-adjusted confidence scores above already reflect cross-examination quality.`;
   }
 
-  const userPrompt = `Analyst Reports (confidence scores are debate-adjusted):
+  const userPrompt = `Analyst Reports (confidence scores are debate-adjusted):\n
+=== BULL AGENT ===
+Verdict: ${bullResult.verdict} | Confidence: ${bullConf}
+Reasons:
+${extractReasonTexts(bullResult.reasons)}
 
-Bull Agent: verdict=${bullResult.verdict}, confidence=${bullConf}
-Reasons: ${extractReasonTexts(bullResult.reasons)}
+=== BEAR AGENT ===
+Verdict: ${bearResult.verdict} | Confidence: ${bearConf}
+Reasons:
+${extractReasonTexts(bearResult.reasons)}
 
-Bear Agent: verdict=${bearResult.verdict}, confidence=${bearConf}
-Reasons: ${extractReasonTexts(bearResult.reasons)}
-
-Risk Agent: verdict=${riskResult.verdict}, confidence=${riskConf}
-Reasons: ${extractReasonTexts(riskResult.reasons)}
+=== RISK AGENT ===
+Verdict: ${riskResult.verdict} | Confidence: ${riskConf}
+Reasons:
+${extractReasonTexts(riskResult.reasons)}
 ${weightSection}
-Apply your weighting rules and produce the final decision.`;
+
+Analyze the above arguments carefully. DO NOT mix up which agent said what. Apply your weighting rules and produce the final decision.`;
 
   const result = await callLLMJson(SYSTEM_PROMPT, userPrompt);
   return {

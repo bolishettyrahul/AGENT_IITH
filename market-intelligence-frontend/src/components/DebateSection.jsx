@@ -2,9 +2,15 @@ import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 
 const AGENT_COLORS = {
-  bull: '#10b981',
-  bear: '#ef4444',
-  risk: '#f59e0b',
+  bull: '#6aab8e',
+  bear: '#b87a7a',
+  risk: '#c9a050',
+};
+
+const AGENT_DISPLAY = {
+  bull: { title: 'GROWTH OPPORTUNITY ANALYST', short: 'GROWTH', icon: '📈' },
+  bear: { title: 'DOWNSIDE RISK ANALYST',      short: 'DOWNSIDE', icon: '📉' },
+  risk: { title: 'VOLATILITY OFFICER',          short: 'VOLATILITY', icon: '⚠️' },
 };
 
 const TURN_TYPE_LABELS = {
@@ -17,7 +23,7 @@ const TURN_TYPE_LABELS = {
 function ConfidenceDelta({ before, after }) {
   const delta = after - before;
   if (delta === 0 || before == null || after == null) return null;
-  const color = delta > 0 ? '#10b981' : '#ef4444';
+  const color = delta > 0 ? '#6aab8e' : '#b87a7a';
   const arrow = delta > 0 ? '↑' : '↓';
   return (
     <span className="conf-delta">
@@ -40,17 +46,17 @@ function DebateTurnCard({ turn, articles }) {
       <div className="debate-turn-header">
         <div className="debate-turn-meta">
           <span className="debate-agent-avatar" style={{ background: agentColor }}>
-            {turn.agent[0].toUpperCase()}
+            {AGENT_DISPLAY[turn.agent]?.icon || turn.agent[0].toUpperCase()}
           </span>
           <span className="debate-agent-name" style={{ color: agentColor }}>
-            {turn.agent.toUpperCase()} AGENT
+            {AGENT_DISPLAY[turn.agent]?.title || turn.agent.toUpperCase()}
           </span>
           <span className="debate-turn-badge" data-type={turn.turn_type}>
             {label}
           </span>
           {turn.target_agent && (
             <span className="debate-target-tag">
-              → targeting {turn.target_agent.toUpperCase()}
+              → targeting {AGENT_DISPLAY[turn.target_agent]?.short || turn.target_agent.toUpperCase()}
             </span>
           )}
         </div>
@@ -130,24 +136,24 @@ function ArgumentStrengthBar({ scores }) {
       <div className="arg-strength-bar">
         {scores.bull > 0 && (
           <div className="arg-bar-segment" style={{ width: `${bullPct}%`, background: AGENT_COLORS.bull }}>
-            {bullPct > 10 ? `BULL ${bullPct}%` : ''}
+            {bullPct > 10 ? `${AGENT_DISPLAY.bull.short} ${bullPct}%` : ''}
           </div>
         )}
         {scores.bear > 0 && (
           <div className="arg-bar-segment" style={{ width: `${bearPct}%`, background: AGENT_COLORS.bear }}>
-            {bearPct > 10 ? `BEAR ${bearPct}%` : ''}
+            {bearPct > 10 ? `${AGENT_DISPLAY.bear.short} ${bearPct}%` : ''}
           </div>
         )}
         {scores.risk > 0 && (
           <div className="arg-bar-segment" style={{ width: `${riskPct}%`, background: AGENT_COLORS.risk }}>
-            {riskPct > 10 ? `RISK ${riskPct}%` : ''}
+            {riskPct > 10 ? `${AGENT_DISPLAY.risk.short} ${riskPct}%` : ''}
           </div>
         )}
       </div>
       <div className="arg-strength-legend">
-        <span style={{ color: AGENT_COLORS.bull }}>● Bull {scores.bull || 0} wins</span>
-        <span style={{ color: AGENT_COLORS.bear }}>● Bear {scores.bear || 0} wins</span>
-        <span style={{ color: AGENT_COLORS.risk }}>● Risk {scores.risk || 0} hits</span>
+        <span style={{ color: AGENT_COLORS.bull }}>● {AGENT_DISPLAY.bull.short} {scores.bull || 0} wins</span>
+        <span style={{ color: AGENT_COLORS.bear }}>● {AGENT_DISPLAY.bear.short} {scores.bear || 0} wins</span>
+        <span style={{ color: AGENT_COLORS.risk }}>● {AGENT_DISPLAY.risk.short} {scores.risk || 0} hits</span>
       </div>
     </div>
   );
@@ -181,10 +187,10 @@ function SynthesisTab({ debateComplete }) {
         <span className="algo-tag">Delphi Method</span>
         <p className="synthesis-desc">{fa?.delphi_method?.description}</p>
         <div className="synthesis-detail">
-          <span>Bull confidence shift: <strong style={{ color: fa?.delphi_method?.bull_net_change >= 0 ? '#10b981' : '#ef4444' }}>
+          <span>Bull confidence shift: <strong style={{ color: fa?.delphi_method?.bull_net_change >= 0 ? '#6aab8e' : '#b87a7a' }}>
             {fa?.delphi_method?.bull_net_change >= 0 ? '+' : ''}{fa?.delphi_method?.bull_net_change} → {fa?.delphi_method?.bull_final}
           </strong></span>
-          <span>Bear confidence shift: <strong style={{ color: fa?.delphi_method?.bear_net_change >= 0 ? '#10b981' : '#ef4444' }}>
+          <span>Bear confidence shift: <strong style={{ color: fa?.delphi_method?.bear_net_change >= 0 ? '#6aab8e' : '#b87a7a' }}>
             {fa?.delphi_method?.bear_net_change >= 0 ? '+' : ''}{fa?.delphi_method?.bear_net_change} → {fa?.delphi_method?.bear_final}
           </strong></span>
         </div>
@@ -203,8 +209,8 @@ function SynthesisTab({ debateComplete }) {
       <div className="synthesis-outcome">
         <div className="synthesis-outcome-item">
           <span className="synthesis-outcome-label">DEBATE WINNER</span>
-          <span className="synthesis-outcome-value" style={{ color: AGENT_COLORS[debate_winner] || '#fff' }}>
-            {debate_winner?.toUpperCase()}
+          <span className="synthesis-outcome-value" style={{ color: AGENT_COLORS[debate_winner] || '#fff', fontSize: '0.85rem' }}>
+            {AGENT_DISPLAY[debate_winner]?.icon} {AGENT_DISPLAY[debate_winner]?.short || debate_winner?.toUpperCase()}
           </span>
         </div>
         <div className="synthesis-outcome-item">
@@ -213,7 +219,7 @@ function SynthesisTab({ debateComplete }) {
         </div>
         <div className="synthesis-outcome-item">
           <span className="synthesis-outcome-label">CONVERGENCE</span>
-          <span className="synthesis-outcome-value" style={{ color: convergence_achieved ? '#10b981' : '#f59e0b' }}>
+          <span className="synthesis-outcome-value" style={{ color: convergence_achieved ? '#6aab8e' : '#c9a050' }}>
             {convergence_achieved ? 'ACHIEVED' : 'FORCED'}
           </span>
         </div>
@@ -273,7 +279,7 @@ export default function DebateSection({
           )}
         </div>
         <p className="debate-subtitle">
-          Cross-examination debate between agents before mediator synthesis
+          Cross-examination between Growth Opportunity, Downside Risk &amp; Volatility analysts — before Chief Investment Officer synthesis
         </p>
       </div>
 
@@ -308,10 +314,13 @@ export default function DebateSection({
               return (
                 <div key={agentKey} className="opening-card" style={{ borderTopColor: AGENT_COLORS[agentKey] }}>
                   <div className="opening-card-header">
-                    <span style={{ color: AGENT_COLORS[agentKey], fontWeight: 800, fontSize: '0.75rem', letterSpacing: '0.1em' }}>
-                      {agentKey.toUpperCase()} AGENT
-                    </span>
-                    <span className="verdict-chip">{agent.verdict}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.1rem' }}>{AGENT_DISPLAY[agentKey]?.icon}</span>
+                      <span style={{ color: AGENT_COLORS[agentKey], fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.08em' }}>
+                        {AGENT_DISPLAY[agentKey]?.title || agentKey.toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="verdict-chip" style={{ backgroundColor: AGENT_COLORS[agentKey], color: '#0a0a0a', border: 'none', fontWeight: 900 }}>{agent.verdict}</span>
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', margin: '0.75rem 0' }}>
                     {agent.confidence}%
