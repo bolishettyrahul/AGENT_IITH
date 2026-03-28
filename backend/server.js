@@ -84,44 +84,51 @@ app.get('/tracked', (req, res) => {
   res.json({ stocks: trackedStocks });
 });
 
-// Scheduled monitoring worker (runs every 1 minute for demo purposes, originally requested 5 min)
+// Scheduled monitoring worker
+let isWorkerRunning = false;
 cron.schedule('*/1 * * * *', async () => {
-  if (trackedStocks.length === 0) return;
-  console.log('[Worker] Running background monitoring for tracked stocks...');
+  if (trackedStocks.length === 0 || isWorkerRunning) return;
+  isWorkerRunning = true;
+  console.log(`[Worker] Running background monitoring for ${trackedStocks.length} tracked stocks...`);
   
   const newAlerts = [];
   
-  for (let i = 0; i < trackedStocks.length; i++) {
-    const stock = trackedStocks[i];
-    try {
-      // Light re-analysis via existing pipeline primitives just to get fresh data
-      const scraperResult = await scrapeYahooFinance(stock.ticker);
-      
-      // We parse the exact price and change from the scraper text
-      const priceRally = scraperResult.newsText.match(/Current Price: \$([\d.]+)/);
-      const changeRally = scraperResult.newsText.match(/Change: ([\d.-]+)%/);
-      
-      const newPrice = priceRally ? parseFloat(priceRally[1]) : stock.price;
-      const newChange = changeRally ? parseFloat(changeRally[1]) : stock.change;
-      
-      // Detect anomalies for alerts
-      if (stock.price > 0 && Math.abs(newChange) > 2.0 && stock.change !== newChange) {
-        newAlerts.push({
-          ticker: stock.ticker,
-          message: `Volatility alert: Price moved ${newChange.toFixed(2)}% in active trading session.`
-        });
-      }
-      
-      // Update store
-      stock.price = newPrice;
-      stock.change = newChange;
-      
-    } catch (e) {
-      console.warn(`[Worker] Failed tracking ${stock.ticker}`, e.message);
-    }
+  const tasks = trackedStocks.map((stock, i) => 
+    scrapeYahooFinance(stock.ticker)
+      .then((scraperResult) => {
+        const meta = scraperResult.meta || {};
+        const newPrice = meta.regularMarketPrice ?? stock.price;
+        const newChange = meta.regularMarketChangePercent != null ? Number(meta.regularMarketChangePercent) : stock.change;
+
+        // Detect anomalies for alerts
+        if (stock.price > 0 && Math.abs(newChange) > 2.0 && stock.change !== newChange) {
+          newAlerts.push({
+            ticker: stock.ticker,
+            message: `Volatility alert: Price moved ${newChange.toFixed(2)}% in active trading session.`
+          });
+        }
+
+        // Update store
+        stock.price = newPrice;
+        stock.change = newChange;
+
+        // Incremental per-stock broadcast
+        broadcast({ type: 'alerts_update', stocks: trackedStocks, new_alerts: [] });
+        console.log(`[Worker] ${stock.ticker}: $${newPrice} (${newChange >= 0 ? '+' : ''}${newChange.toFixed(2)}%)`);
+      })
+      .catch((e) => {
+        console.warn(`[Worker] Failed tracking ${stock.ticker}`, e.message);
+      })
+  );
+
+  await Promise.allSettled(tasks);
+  
+  // Final summary broadcast with any accumulated alerts
+  if (newAlerts.length > 0) {
+    broadcast({ type: 'alerts_update', stocks: trackedStocks, new_alerts: newAlerts });
   }
   
-  broadcast({ type: 'alerts_update', stocks: trackedStocks, new_alerts: newAlerts });
+  isWorkerRunning = false;
 });
 
 // POST /analyze — accepts { ticker, persona }
@@ -241,6 +248,39 @@ app.get('/', (_req, res) => res.json({
 }));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+// GET /chart/:ticker — historical price data for charting
+app.get('/chart/:ticker', async (req, res) => {
+  const { ticker } = req.params;
+  const range = req.query.range || '1mo';
+  const interval = req.query.interval || '1d';
+  try {
+    const axios = require('axios');
+    const response = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker.toUpperCase()}`, {
+      params: { interval, range },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', Accept: 'application/json' },
+      timeout: 10000,
+    });
+    const result = response.data?.chart?.result?.[0];
+    if (!result) return res.status(404).json({ error: 'No chart data found' });
+
+    const timestamps = result.timestamp || [];
+    const closes = result.indicators?.quote?.[0]?.close || [];
+    const meta = result.meta || {};
+
+    res.json({
+      ticker: ticker.toUpperCase(),
+      currency: meta.currency || 'USD',
+      points: timestamps.map((t, i) => ({
+        date: new Date(t * 1000).toISOString().split('T')[0],
+        close: closes[i] != null ? Number(closes[i].toFixed(2)) : null,
+      })).filter(p => p.close != null),
+    });
+  } catch (err) {
+    console.error(`[Chart] Failed for ${ticker}:`, err.message);
+    res.status(500).json({ error: 'Failed to fetch chart data' });
+  }
+});
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {

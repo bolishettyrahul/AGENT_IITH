@@ -1,8 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Activity, Bell, X, ExternalLink, RefreshCw } from 'lucide-react';
+
+// Lightweight SVG line chart component — no external libraries
+function PriceChart({ points }) {
+  if (!points || points.length < 2) {
+    return <div style={{ color: '#888', fontSize: '0.8125rem', padding: '1rem 0' }}>Loading chart data...</div>;
+  }
+
+  const W = 720, H = 200, PAD = 30;
+  const closes = points.map(p => p.close);
+  const minY = Math.min(...closes);
+  const maxY = Math.max(...closes);
+  const rangeY = maxY - minY || 1;
+
+  const scaleX = (i) => PAD + (i / (points.length - 1)) * (W - PAD * 2);
+  const scaleY = (v) => H - PAD - ((v - minY) / rangeY) * (H - PAD * 2);
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${scaleX(i).toFixed(1)},${scaleY(p.close).toFixed(1)}`).join(' ');
+  const areaD = pathD + ` L${scaleX(points.length - 1).toFixed(1)},${H - PAD} L${PAD},${H - PAD} Z`;
+
+  const isUp = closes[closes.length - 1] >= closes[0];
+  const color = isUp ? '#10b981' : '#ef4444';
+
+  // Pick ~5 date labels evenly
+  const labelIdxs = [0, Math.floor(points.length * 0.25), Math.floor(points.length * 0.5), Math.floor(points.length * 0.75), points.length - 1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }}>
+      <defs>
+        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill="url(#chartGrad)" />
+      <path d={pathD} fill="none" stroke={color} strokeWidth="2" />
+      {/* Y-axis labels */}
+      <text x={PAD - 5} y={scaleY(maxY) + 4} fill="#888" fontSize="9" textAnchor="end">${maxY.toFixed(0)}</text>
+      <text x={PAD - 5} y={scaleY(minY) + 4} fill="#888" fontSize="9" textAnchor="end">${minY.toFixed(0)}</text>
+      {/* X-axis date labels */}
+      {labelIdxs.map((idx) => (
+        <text key={idx} x={scaleX(idx)} y={H - 5} fill="#888" fontSize="8" textAnchor="middle">{points[idx]?.date?.slice(5)}</text>
+      ))}
+      {/* Latest price dot */}
+      <circle cx={scaleX(points.length - 1)} cy={scaleY(closes[closes.length - 1])} r="4" fill={color} />
+    </svg>
+  );
+}
 
 export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanalyze }) {
   const [expandedStock, setExpandedStock] = useState(null);
+  const [chartData, setChartData] = useState(null);
+
+  useEffect(() => {
+    if (!expandedStock) { setChartData(null); return; }
+    fetch(`http://localhost:3001/chart/${expandedStock}`)
+      .then(r => r.json())
+      .then(data => setChartData(data.points || []))
+      .catch(() => setChartData([]));
+  }, [expandedStock]);
 
   const getStockDetails = (ticker) => trackedStocks.find(s => s.ticker === ticker);
 
@@ -50,6 +106,11 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
             <button className="btn-primary" onClick={() => setExpandedStock(null)} style={{ padding: '0.75rem 1.5rem', background: 'transparent' }}>
               CLOSE
             </button>
+          </div>
+
+          <div style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.3)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '2rem' }}>
+            <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '1rem' }}>Price History (1 Month)</span>
+            <PriceChart points={chartData} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>

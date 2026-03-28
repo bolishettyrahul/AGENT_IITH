@@ -10,21 +10,37 @@ const YF_HEADERS = {
   Accept: 'application/json',
 };
 
+// ─── Scraper Cache (3-min TTL) ──────────────────────────────────────────────
+const scraperCache = new Map();
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
 /**
  * Primary: Yahoo Finance JSON API — fast, no JS rendering required.
  * Fallback: Bright Data Scraping Browser (puppeteer-core) — used if JSON API fails.
  *
- * Returns: { newsText: string, articles: Article[] }
+ * Returns: { newsText: string, articles: Article[], meta: object }
  *   where Article = { id, title, summary, publisher, url }
+ *   meta contains structured price data: { regularMarketPrice, regularMarketChangePercent, ... }
  *   Source IDs like [S1], [S2] are embedded inline in newsText for LLM attribution.
  */
 async function scrapeYahooFinance(ticker) {
+  const cacheKey = ticker.toUpperCase();
+  const cached = scraperCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+    console.log(`[Scraper] Cache hit for ${cacheKey} (age: ${((Date.now() - cached.timestamp) / 1000).toFixed(0)}s)`);
+    return cached.data;
+  }
+
+  let result;
   try {
-    return await scrapeViaJsonApi(ticker);
+    result = await scrapeViaJsonApi(ticker);
   } catch (err) {
     console.warn(`[Scraper] JSON API failed (${err.message}), falling back to Browser API...`);
-    return await scrapeViaBrowserApi(ticker);
+    result = await scrapeViaBrowserApi(ticker);
   }
+
+  scraperCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  return result;
 }
 
 // ─── Primary: Yahoo Finance JSON API ────────────────────────────────────────
@@ -94,7 +110,7 @@ async function scrapeViaJsonApi(ticker) {
   }
 
   const newsText = lines.join('\n').slice(0, 8000);
-  return { newsText, articles };
+  return { newsText, articles, meta };
 }
 
 // ─── Fallback: Bright Data Scraping Browser (puppeteer-core) ────────────────

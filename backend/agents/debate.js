@@ -355,6 +355,11 @@ Available sources: ${newsRef}`;
       console.log(`[Debate] Early convergence round ${roundNum}: gap=${gap}`);
       break;
     }
+    // ── Decisive winner check — skip further rounds if gap is already large ──
+    if (gap >= 25) {
+      console.log(`[Debate] Decisive winner after round ${roundNum}: gap=${gap}, skipping remaining rounds`);
+      break;
+    }
   }
 
   // ─── Compute Kelly Criterion weights ──────────────────────────────────────

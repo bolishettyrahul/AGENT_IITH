@@ -9,8 +9,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // callLLM runs per-agent (agents still launch in parallel via Promise.allSettled in server.js)
 // This only retries the individual call if Groq returns 429
 async function callLLM(systemPrompt, userPrompt) {
-  const MAX_RETRIES = 4;
-  let delay = 8000;
+  const MAX_RETRIES = 3;
+  let delay = 3000;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -30,7 +30,7 @@ async function callLLM(systemPrompt, userPrompt) {
             Authorization: `Bearer ${process.env.GROQ_KEY}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000,
+          timeout: 15000,
         }
       );
       return response.data.choices[0].message.content;
@@ -39,7 +39,7 @@ async function callLLM(systemPrompt, userPrompt) {
       if (status === 429 && attempt < MAX_RETRIES) {
         const retryAfter = err.response?.headers?.['retry-after'];
         const suggested = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
-        const waitMs = Math.min(suggested, 60000); // cap at 60s — fail fast if badly throttled
+        const waitMs = Math.min(suggested, 30000); // cap at 30s — fail fast if badly throttled
         console.warn(`[LLM] 429 — waiting ${waitMs}ms (attempt ${attempt}/${MAX_RETRIES})`);
         await sleep(waitMs);
         delay *= 2;

@@ -453,7 +453,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           ) : wsConnected ? (
             <span className="status-indicator online">SYSTEM READY</span>
           ) : (
-            <span className="status-indicator loading">CONNECTING...</span>
+            <span className="status-indicator" style={{ color: '#f59e0b', borderColor: 'rgba(245, 158, 11, 0.3)' }}>WS OFFLINE</span>
           )}
         </div>
       </nav>
@@ -465,6 +465,13 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           <div className="anim-stagger-1" style={{backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '1rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem'}}>
             <AlertCircle size={18} />
             {errorState}
+          </div>
+        )}
+
+        {!wsConnected && !loading && (
+          <div className="anim-stagger-1" style={{backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#fbbf24', padding: '0.75rem 1.25rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem'}}>
+            <AlertCircle size={16} />
+            WebSocket offline — analysis can still be triggered but live streaming updates may not appear until reconnection.
           </div>
         )}
 
@@ -496,7 +503,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
               <option style={{background: '#0a0a0a', color: '#10b981'}} value="conservative">CONSERVATIVE TRADER</option>
             </select>
           </div>
-          <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim() || !wsConnected} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
+          <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim()} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
             {loading ? 'ANALYZING...' : 'ANALYZE'}
           </button>
         </div>
