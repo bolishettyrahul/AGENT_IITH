@@ -20,7 +20,7 @@ function PriceChart({ points }) {
   const areaD = pathD + ` L${scaleX(points.length - 1).toFixed(1)},${H - PAD} L${PAD},${H - PAD} Z`;
 
   const isUp = closes[closes.length - 1] >= closes[0];
-  const color = isUp ? '#10b981' : '#ef4444';
+  const color = isUp ? '#6aab8e' : '#b87a7a';
 
   // Pick ~5 date labels evenly
   const labelIdxs = [0, Math.floor(points.length * 0.25), Math.floor(points.length * 0.5), Math.floor(points.length * 0.75), points.length - 1];
@@ -82,7 +82,7 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
               <h2 style={{ fontSize: '3rem', fontWeight: 900, lineHeight: 1 }}>{stock.ticker}</h2>
               <div style={{ fontSize: '1.5rem', fontWeight: 600, marginTop: '0.5rem' }}>
                 ${stock.price?.toFixed(2) || '0.00'} 
-                <span style={{ fontSize: '1rem', marginLeft: '1rem', color: isUp ? '#10b981' : '#ef4444' }}>
+                <span style={{ fontSize: '1rem', marginLeft: '1rem', color: isUp ? '#6aab8e' : '#b87a7a' }}>
                   {isUp ? '▲' : '▼'} {Math.abs(stock.change || 0).toFixed(2)}%
                 </span>
               </div>
@@ -116,7 +116,7 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
             <div style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.3)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
               <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action Trigger</span>
-              <div style={{ fontSize: '1rem', color: '#ef4444', fontFamily: 'Space Mono, monospace', marginTop: '0.5rem' }}>{stock.trigger}</div>
+              <div style={{ fontSize: '1rem', color: '#b87a7a', fontFamily: 'Space Mono, monospace', marginTop: '0.5rem' }}>{stock.trigger}</div>
             </div>
 
             <div style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.3)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -207,7 +207,7 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
                   
                   <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>
                     ${stock.price?.toFixed(2) || '0.00'} 
-                    <span style={{ fontSize: '0.875rem', marginLeft: '0.75rem', color: isUp ? '#10b981' : '#ef4444' }}>
+                    <span style={{ fontSize: '0.875rem', marginLeft: '0.75rem', color: isUp ? '#6aab8e' : '#b87a7a' }}>
                       {isUp ? '▲' : '▼'} {Math.abs(stock.change || 0).toFixed(2)}%
                     </span>
                   </div>

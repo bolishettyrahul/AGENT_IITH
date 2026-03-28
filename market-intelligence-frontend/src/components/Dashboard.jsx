@@ -3,6 +3,13 @@ import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink, Bell } fr
 import DebateSection from './DebateSection';
 import { HTTP_URL, WS_URL } from '../config';
 
+const AGENT_TITLES = {
+  bull: { title: 'GROWTH OPPORTUNITY ANALYST', color: '#6aab8e', icon: '📈' },
+  bear: { title: 'DOWNSIDE RISK ANALYST', color: '#b87a7a', icon: '📉' },
+  risk: { title: 'VOLATILITY OFFICER', color: '#c9a050', icon: '⚠️' },
+  mediator: { title: 'CHIEF INVESTMENT OFFICER', color: '#8480b8', icon: '🎯' },
+};
+
 export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], targetTicker = '' }) {
   const [tickerInput, setTickerInput] = useState("");
 
@@ -297,8 +304,9 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
     return sourceArticles.find(a => a.id === sourceId);
   };
 
-  const AgentColumn = ({ title, agentKey }) => {
+  const AgentColumn = ({ agentKey }) => {
     const data = results[agentKey];
+    const config = AGENT_TITLES[agentKey];
     const [expandedReasons, setExpandedReasons] = useState({});
     const [showAllSources, setShowAllSources] = useState(false);
 
@@ -309,8 +317,11 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
     if (!data) {
       // Skeleton Loading State
       return (
-        <div className="base-card agent-column" data-agent={agentKey} style={{ opacity: 0.7 }}>
-          <h4 className="agent-title" style={{color: '#555'}}>{title}</h4>
+        <div className="base-card agent-column" data-agent={agentKey} style={{ opacity: 0.7, borderLeft: `4px solid ${config.color}` }}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem'}}>
+            <span style={{fontSize: '1.25rem'}}>{config.icon}</span>
+            <h4 className="agent-title" style={{color: '#555', margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>{config.title}</h4>
+          </div>
           <div className="skeleton-line" style={{width: '60%', height: '24px', marginBottom: '1.5rem'}}></div>
           <div className="skeleton-line" style={{width: '100%'}}></div>
           <div className="skeleton-line" style={{width: '90%'}}></div>
@@ -325,11 +336,27 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
     )];
 
     return (
-      <div className="base-card agent-column agent-arrive-anim" data-agent={agentKey}>
-        <h4 className="agent-title">{title}</h4>
+      <div className="base-card agent-column agent-arrive-anim" data-agent={agentKey} style={{ borderLeft: `4px solid ${config.color}` }}>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+            <span style={{fontSize: '1.5rem'}}>{config.icon}</span>
+            <h4 className="agent-title" style={{color: config.color, margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>{config.title}</h4>
+          </div>
+        </div>
         <div className="agent-verdict-row">
-          <span className="verdict-chip">{data.verdict}</span>
-          <span className="agent-conf-text">{data.confidence}% CONFIDENCE</span>
+          <span className="verdict-chip" style={{
+            backgroundColor: config.color,
+            border: `2px solid ${config.color}`,
+            color: '#0a0a0a',
+            fontWeight: 900,
+            fontSize: '1rem',
+            boxShadow: `0 0 16px ${config.color}33`
+          }}>
+            {data.verdict}
+          </span>
+          <span className="agent-conf-text" style={{color: config.color, fontWeight: 600}}>
+            {data.confidence}% CONVICTION
+          </span>
         </div>
         
         {/* Attributed Reasons */}
@@ -443,9 +470,9 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
   const getConflictColor = (score) => {
     if (!score) return '#ffffff';
     const s = score.toUpperCase();
-    if (s === 'HIGH') return '#ef4444'; // Red
-    if (s === 'MEDIUM') return '#f59e0b'; // Amber
-    if (s === 'LOW') return '#10b981'; // Green
+    if (s === 'HIGH') return '#b87a7a'; // Red
+    if (s === 'MEDIUM') return '#c9a050'; // Amber
+    if (s === 'LOW') return '#6aab8e'; // Green
     return '#ffffff';
   };
 
@@ -461,7 +488,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           <button
             className="status-indicator"
             onClick={onViewTracked}
-            style={{ cursor: 'pointer', background: 'transparent', border: '1px solid var(--border-color)', color: '#10b981', fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.08em' }}
+            style={{ cursor: 'pointer', background: 'transparent', border: '1px solid var(--border-color)', color: '#6aab8e', fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.08em' }}
           >
             <Bell size={12} style={{ display: 'inline-block', marginRight: '4px', marginBottom: '-2px' }} />
             TRACKED ({trackedStocks.length})
@@ -471,7 +498,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           ) : wsConnected ? (
             <span className="status-indicator online">SYSTEM READY</span>
           ) : (
-            <span className="status-indicator" style={{ color: '#f59e0b', borderColor: 'rgba(245, 158, 11, 0.3)' }}>WS OFFLINE</span>
+            <span className="status-indicator" style={{ color: '#c9a050', borderColor: 'rgba(245, 158, 11, 0.3)' }}>WS OFFLINE</span>
           )}
         </div>
       </nav>
@@ -480,7 +507,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
         
         {/* Error Banner */}
         {errorState && (
-          <div className="anim-stagger-1" style={{backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '1rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem'}}>
+          <div className="anim-stagger-1" style={{backgroundColor: 'rgba(184, 122, 122, 0.1)', border: '1px solid rgba(184, 122, 122, 0.3)', color: '#c49898', padding: '1rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem'}}>
             <AlertCircle size={18} />
             {errorState}
           </div>
@@ -517,8 +544,8 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
               onChange={e => setPersona(e.target.value)}
             >
               <option style={{background: '#0a0a0a', color: '#fff'}} value="balanced">BALANCED TRADER</option>
-              <option style={{background: '#0a0a0a', color: '#ef4444'}} value="aggressive">AGGRESSIVE TRADER</option>
-              <option style={{background: '#0a0a0a', color: '#10b981'}} value="conservative">CONSERVATIVE TRADER</option>
+              <option style={{background: '#0a0a0a', color: '#b87a7a'}} value="aggressive">AGGRESSIVE TRADER</option>
+              <option style={{background: '#0a0a0a', color: '#6aab8e'}} value="conservative">CONSERVATIVE TRADER</option>
             </select>
           </div>
           <button className="btn-primary" onClick={handleAnalyze} disabled={loading || !tickerInput.trim()} style={{padding: '0.875rem 2.5rem', fontSize: '1rem'}}>
@@ -552,9 +579,9 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
         </div>
 
         <div className="agents-grid">
-          <AgentColumn title="BULL AGENT" agentKey="bull" />
-          <AgentColumn title="BEAR AGENT" agentKey="bear" />
-          <AgentColumn title="RISK AGENT" agentKey="risk" />
+          <AgentColumn agentKey="bull" />
+          <AgentColumn agentKey="bear" />
+          <AgentColumn agentKey="risk" />
         </div>
 
         <DebateSection
@@ -568,7 +595,13 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
 
         {results.mediator ? (
           <div>
-            <div className="base-card decision-wrap agent-arrive-anim">
+            <div className="base-card decision-wrap agent-arrive-anim" style={{ borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem'}}>
+                <span style={{fontSize: '1.75rem'}}>{AGENT_TITLES.mediator.icon}</span>
+                <h3 style={{color: AGENT_TITLES.mediator.color, margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>
+                  {AGENT_TITLES.mediator.title}
+                </h3>
+              </div>
               <div className="decision-header">
                 <div className="decision-title">
                   {tickerInput.toUpperCase()} <span>→ {results.mediator.decision}</span>
@@ -594,7 +627,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
 
               {!trackedStocks.find(s => s.ticker === tickerInput.toUpperCase().trim()) && (
                 <div style={{ marginTop: '2rem' }}>
-                  <button className="btn-primary" onClick={handleTrackStock} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#10b981', border: '1px solid #10b981' }}>
+                  <button className="btn-primary" onClick={handleTrackStock} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#6aab8e', border: '1px solid #6aab8e' }}>
                     <Bell size={16} style={{ display: 'inline', marginRight: '0.5rem', marginBottom: '-2px' }} />
                     TRACK STOCK VIRTUALLY
                   </button>
@@ -602,18 +635,29 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
               )}
             </div>
 
-            {/* Interactive User Response Field */}
-            <div key={analysisId} className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem' }}>
-              <h4 style={{fontSize: '0.875rem', fontWeight: 800, marginBottom: '1.5rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em'}}>
-                Adjust Agent Constraints & Respond
-              </h4>
+            {/* Interactive CIO Response Field */}
+            <div key={analysisId} className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem', borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem'}}>
+                <span style={{fontSize: '1.25rem'}}>{AGENT_TITLES.mediator.icon}</span>
+                <h4 style={{fontSize: '0.75rem', fontWeight: 800, margin: 0, color: AGENT_TITLES.mediator.color, textTransform: 'uppercase', letterSpacing: '0.05em'}}>
+                  {AGENT_TITLES.mediator.title} Constraint Analysis
+                </h4>
+              </div>
               
               {chatLogs.length > 0 && (
                 <div style={{marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem'}}>
                   {chatLogs.map((log, idx) => (
-                    <div key={idx} style={{fontSize: '0.875rem', color: log.sender === 'You' ? '#ccc' : '#fff'}}>
-                      <strong style={{color: '#888', marginRight: '0.5rem'}}>{log.sender}:</strong>
-                      {log.text}
+                    <div key={idx} style={{
+                      fontSize: '0.875rem',
+                      padding: '1rem',
+                      borderRadius: '0.5rem',
+                      backgroundColor: log.sender === 'You' ? 'rgba(139, 92, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                      borderLeft: `3px solid ${log.sender === 'You' ? '#8480b8' : AGENT_TITLES.mediator.color}`
+                    }}>
+                      <strong style={{color: log.sender === 'You' ? '#c4b5fd' : AGENT_TITLES.mediator.color, marginRight: '0.5rem'}}>
+                        {log.sender === 'You' ? '👤 You' : `${AGENT_TITLES.mediator.icon} ${AGENT_TITLES.mediator.title}`}:
+                      </strong>
+                      <span style={{color: log.sender === 'You' ? '#d1d5db' : '#e0e7ff'}}>{log.text}</span>
                     </div>
                   ))}
                 </div>
