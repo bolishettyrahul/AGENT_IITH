@@ -576,21 +576,6 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           </div>
         </div>
 
-        <div className="agents-grid">
-          <AgentColumn agentKey="bull" />
-          <AgentColumn agentKey="bear" />
-          <AgentColumn agentKey="risk" />
-        </div>
-
-        <DebateSection
-          isDebating={isDebating}
-          debateTurns={debateTurns}
-          debateRounds={debateRounds}
-          debateComplete={debateComplete}
-          openingAgents={results}
-          articles={sourceArticles}
-        />
-
         {results.mediator ? (
           <div>
             <div className="base-card decision-wrap agent-arrive-anim" style={{ borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
@@ -683,6 +668,21 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
             <div className="skeleton-line" style={{width: '95%', height: '50px'}}></div>
           </div>
         )}
+
+        <div className="agents-grid">
+          <AgentColumn agentKey="bull" />
+          <AgentColumn agentKey="bear" />
+          <AgentColumn agentKey="risk" />
+        </div>
+
+        <DebateSection
+          isDebating={isDebating}
+          debateTurns={debateTurns}
+          debateRounds={debateRounds}
+          debateComplete={debateComplete}
+          openingAgents={results}
+          articles={sourceArticles}
+        />
       </div>
     </>
   );
