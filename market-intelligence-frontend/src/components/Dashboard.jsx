@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink, Bell } from 'lucide-react';
 import DebateSection from './DebateSection';
 import { HTTP_URL, WS_URL } from '../config';
 
 const AGENT_TITLES = {
-  bull: { title: 'GROWTH OPPORTUNITY ANALYST', color: '#6aab8e', icon: '📈' },
-  bear: { title: 'DOWNSIDE RISK ANALYST', color: '#b87a7a', icon: '📉' },
-  risk: { title: 'VOLATILITY OFFICER', color: '#c9a050', icon: '⚠️' },
-  mediator: { title: 'CHIEF INVESTMENT OFFICER', color: '#8480b8', icon: '🎯' },
+  bull: { title: 'GROWTH OPPORTUNITY ANALYST', color: '#6aab8e' },
+  bear: { title: 'DOWNSIDE RISK ANALYST', color: '#b87a7a' },
+  risk: { title: 'VOLATILITY OFFICER', color: '#c9a050' },
+  mediator: { title: 'CHIEF INVESTMENT OFFICER', color: '#8480b8' },
 };
 
 export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], targetTicker = '' }) {
   const [tickerInput, setTickerInput] = useState("");
+  const [showTrackModal, setShowTrackModal] = useState(false);
+  const [buyBelowPrice, setBuyBelowPrice] = useState('');
 
   useEffect(() => {
     if (targetTicker) setTickerInput(targetTicker);
@@ -280,6 +281,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
   };
 
   const handleTrackStock = async () => {
+    const priceNum = parseFloat(buyBelowPrice);
     try {
        await fetch(`${HTTP_URL}/track`, {
          method: "POST",
@@ -290,9 +292,12 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
            confidence: results.mediator?.confidence,
            rationale: results.mediator?.rationale,
            trigger: results.mediator?.trigger,
-           sources: sourceArticles
+           sources: sourceArticles,
+           buyBelowPrice: !isNaN(priceNum) && priceNum > 0 ? priceNum : null,
          })
        });
+       setShowTrackModal(false);
+       setBuyBelowPrice('');
        onViewTracked(); // Switch view
     } catch (e) {
        console.error(e);
@@ -319,7 +324,6 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
       return (
         <div className="base-card agent-column" data-agent={agentKey} style={{ opacity: 0.7, borderLeft: `4px solid ${config.color}` }}>
           <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem'}}>
-            <span style={{fontSize: '1.25rem'}}>{config.icon}</span>
             <h4 className="agent-title" style={{color: '#555', margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>{config.title}</h4>
           </div>
           <div className="skeleton-line" style={{width: '60%', height: '24px', marginBottom: '1.5rem'}}></div>
@@ -339,7 +343,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
       <div className="base-card agent-column agent-arrive-anim" data-agent={agentKey} style={{ borderLeft: `4px solid ${config.color}` }}>
         <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-            <span style={{fontSize: '1.5rem'}}>{config.icon}</span>
+
             <h4 className="agent-title" style={{color: config.color, margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>{config.title}</h4>
           </div>
         </div>
@@ -376,7 +380,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                   <span className="reason-text">{reasonObj.text}</span>
                   {reasonObj.sources && reasonObj.sources.length > 0 && (
                     <span className="expand-icon">
-                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      {isExpanded ? '▲' : '▼'}
                     </span>
                   )}
                 </div>
@@ -413,7 +417,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                             <span className="source-publisher">{article.publisher}</span>
                             {article.url && (
                               <a href={article.url} target="_blank" rel="noopener noreferrer" className="source-link-icon">
-                                <ExternalLink size={12} />
+                                →
                               </a>
                             )}
                           </div>
@@ -436,7 +440,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           <div className="explainability-footer">
             <button className="explainability-toggle" onClick={() => setShowAllSources(!showAllSources)}>
               {showAllSources ? 'HIDE' : 'VIEW'} ALL SOURCES ({allSourceIds.length})
-              {showAllSources ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {showAllSources ? '▲' : '▼'}
             </button>
             {showAllSources && (
               <div className="source-panel">
@@ -452,7 +456,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                       </div>
                       {article.url && (
                         <a href={article.url} target="_blank" rel="noopener noreferrer" className="source-link-icon">
-                          <ExternalLink size={12} />
+                          →
                         </a>
                       )}
                     </div>
@@ -482,7 +486,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
       
       <nav className="top-navbar">
         <div className="navbar-brand" onClick={onHome} style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-          <ArrowLeft size={16}/> MARKET.INTEL
+          ← MARKET.INTEL
         </div>
         <div className="navbar-status" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button
@@ -490,7 +494,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
             onClick={onViewTracked}
             style={{ cursor: 'pointer', background: 'transparent', border: '1px solid var(--border-color)', color: '#6aab8e', fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.08em' }}
           >
-            <Bell size={12} style={{ display: 'inline-block', marginRight: '4px', marginBottom: '-2px' }} />
+            [ALERTS]
             TRACKED ({trackedStocks.length})
           </button>
           {loading ? (
@@ -508,14 +512,14 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
         {/* Error Banner */}
         {errorState && (
           <div className="anim-stagger-1" style={{backgroundColor: 'rgba(184, 122, 122, 0.1)', border: '1px solid rgba(184, 122, 122, 0.3)', color: '#c49898', padding: '1rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem'}}>
-            <AlertCircle size={18} />
+            !
             {errorState}
           </div>
         )}
 
         {!wsConnected && !loading && (
           <div className="anim-stagger-1" style={{backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#fbbf24', padding: '0.75rem 1.25rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem'}}>
-            <AlertCircle size={16} />
+            !
             WebSocket offline — analysis can still be triggered but live streaming updates may not appear until reconnection.
           </div>
         )}
@@ -578,26 +582,10 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           </div>
         </div>
 
-        <div className="agents-grid">
-          <AgentColumn agentKey="bull" />
-          <AgentColumn agentKey="bear" />
-          <AgentColumn agentKey="risk" />
-        </div>
-
-        <DebateSection
-          isDebating={isDebating}
-          debateTurns={debateTurns}
-          debateRounds={debateRounds}
-          debateComplete={debateComplete}
-          openingAgents={results}
-          articles={sourceArticles}
-        />
-
         {results.mediator ? (
           <div>
             <div className="base-card decision-wrap agent-arrive-anim" style={{ borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
               <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem'}}>
-                <span style={{fontSize: '1.75rem'}}>{AGENT_TITLES.mediator.icon}</span>
                 <h3 style={{color: AGENT_TITLES.mediator.color, margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>
                   {AGENT_TITLES.mediator.title}
                 </h3>
@@ -627,18 +615,111 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
 
               {!trackedStocks.find(s => s.ticker === tickerInput.toUpperCase().trim()) && (
                 <div style={{ marginTop: '2rem' }}>
-                  <button className="btn-primary" onClick={handleTrackStock} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#6aab8e', border: '1px solid #6aab8e' }}>
-                    <Bell size={16} style={{ display: 'inline', marginRight: '0.5rem', marginBottom: '-2px' }} />
+                  <button className="btn-primary" onClick={() => setShowTrackModal(true)} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#6aab8e', border: '1px solid #6aab8e' }}>
+                    [NEW]
                     TRACK STOCK VIRTUALLY
                   </button>
+                </div>
+              )}
+
+              {/* Price Alert Modal */}
+              {showTrackModal && (
+                <div style={{
+                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                  background: 'rgba(0,0,0,0.85)', zIndex: 9999,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                  animation: 'fadeIn 0.2s ease'
+                }} onClick={() => { setShowTrackModal(false); setBuyBelowPrice(''); }}>
+                  <div style={{
+                    background: 'linear-gradient(145deg, #111111, #0a0a0a)',
+                    border: '1px solid rgba(106,171,142,0.3)',
+                    borderRadius: '1.25rem',
+                    padding: '2.5rem',
+                    width: '100%',
+                    maxWidth: '480px',
+                    boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(106,171,142,0.08)',
+                    animation: 'slideUp 0.3s ease'
+                  }} onClick={e => e.stopPropagation()}>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '1.5rem' }}>📊</span>
+                      <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, letterSpacing: '0.05em', color: '#fff' }}>
+                        TRACK {tickerInput.toUpperCase().trim()}
+                      </h3>
+                    </div>
+                    <p style={{ color: '#888', fontSize: '0.875rem', margin: '0 0 2rem', lineHeight: 1.5 }}>
+                      Set a target buy price. You'll get notified when the stock drops below this level.
+                    </p>
+
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#6aab8e', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.625rem' }}>
+                      BUY BELOW PRICE (USD)
+                    </label>
+                    <div style={{
+                      display: 'flex', alignItems: 'center',
+                      background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(106,171,142,0.3)',
+                      borderRadius: '0.625rem', padding: '0 1rem', marginBottom: '0.75rem',
+                      transition: 'border-color 0.2s ease'
+                    }}>
+                      <span style={{ color: '#6aab8e', fontWeight: 700, fontSize: '1.25rem', marginRight: '0.5rem' }}>$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={buyBelowPrice}
+                        onChange={e => setBuyBelowPrice(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleTrackStock()}
+                        placeholder="e.g. 175.00"
+                        autoFocus
+                        style={{
+                          flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                          color: '#fff', fontSize: '1.25rem', fontWeight: 600,
+                          padding: '1rem 0', fontFamily: 'Space Mono, monospace',
+                        }}
+                      />
+                    </div>
+                    <p style={{ color: '#555', fontSize: '0.75rem', margin: '0 0 2rem' }}>
+                      Leave empty to track without a price alert.
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <button
+                        onClick={handleTrackStock}
+                        style={{
+                          flex: 1, padding: '0.875rem',
+                          background: 'linear-gradient(135deg, rgba(106,171,142,0.2), rgba(106,171,142,0.1))',
+                          color: '#6aab8e', border: '1px solid rgba(106,171,142,0.4)',
+                          borderRadius: '0.625rem', cursor: 'pointer',
+                          fontWeight: 800, fontSize: '0.8125rem', letterSpacing: '0.08em',
+                          transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={e => { e.target.style.background = 'rgba(106,171,142,0.25)'; e.target.style.boxShadow = '0 0 20px rgba(106,171,142,0.15)'; }}
+                        onMouseLeave={e => { e.target.style.background = 'linear-gradient(135deg, rgba(106,171,142,0.2), rgba(106,171,142,0.1))'; e.target.style.boxShadow = 'none'; }}
+                      >
+                        CONFIRM & TRACK
+                      </button>
+                      <button
+                        onClick={() => { setShowTrackModal(false); setBuyBelowPrice(''); }}
+                        style={{
+                          padding: '0.875rem 1.5rem',
+                          background: 'transparent', color: '#888',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '0.625rem', cursor: 'pointer',
+                          fontWeight: 700, fontSize: '0.8125rem', letterSpacing: '0.05em',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Interactive CIO Response Field */}
             <div key={analysisId} className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem', borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
-              <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem'}}>
-                <span style={{fontSize: '1.25rem'}}>{AGENT_TITLES.mediator.icon}</span>
+              <div style={{marginBottom: '1.5rem'}}>
                 <h4 style={{fontSize: '0.75rem', fontWeight: 800, margin: 0, color: AGENT_TITLES.mediator.color, textTransform: 'uppercase', letterSpacing: '0.05em'}}>
                   {AGENT_TITLES.mediator.title} Constraint Analysis
                 </h4>
@@ -655,7 +736,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                       borderLeft: `3px solid ${log.sender === 'You' ? '#8480b8' : AGENT_TITLES.mediator.color}`
                     }}>
                       <strong style={{color: log.sender === 'You' ? '#c4b5fd' : AGENT_TITLES.mediator.color, marginRight: '0.5rem'}}>
-                        {log.sender === 'You' ? '👤 You' : `${AGENT_TITLES.mediator.icon} ${AGENT_TITLES.mediator.title}`}:
+                        {log.sender === 'You' ? 'You' : AGENT_TITLES.mediator.title}:
                       </strong>
                       <span style={{color: log.sender === 'You' ? '#d1d5db' : '#e0e7ff'}}>{log.text}</span>
                     </div>
@@ -687,6 +768,21 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
             <div className="skeleton-line" style={{width: '95%', height: '50px'}}></div>
           </div>
         )}
+
+        <div className="agents-grid">
+          <AgentColumn agentKey="bull" />
+          <AgentColumn agentKey="bear" />
+          <AgentColumn agentKey="risk" />
+        </div>
+
+        <DebateSection
+          isDebating={isDebating}
+          debateTurns={debateTurns}
+          debateRounds={debateRounds}
+          debateComplete={debateComplete}
+          openingAgents={results}
+          articles={sourceArticles}
+        />
       </div>
     </>
   );

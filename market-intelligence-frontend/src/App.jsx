@@ -79,7 +79,6 @@ export default function App() {
       <div className="toast-container">
         {toasts.map((toast) => (
           <div key={toast.id} className="toast-item">
-            <div className="toast-icon">⚠️</div>
             <div className="toast-content">
               <strong>{toast.ticker} ALERT</strong>
               <p>{toast.message}</p>

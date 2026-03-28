@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Activity, ShieldAlert, TrendingUp } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 // Easily editable copy for the landing page
 const CONTENT = {
@@ -14,19 +14,19 @@ const CONTENT = {
   features: [
     {
       id: "bull",
-      icon: <TrendingUp size={28} className="feature-icon" />,
+      icon: '[BULL]',
       title: "BULL AGENT",
       desc: "Aggressively scans for upward momentum, earnings beats, sector growth, and undocumented macro catalysts."
     },
     {
       id: "bear",
-      icon: <Activity size={28} className="feature-icon" />,
+      icon: '[BEAR]',
       title: "BEAR AGENT",
       desc: "Identifies overvaluation, sector headwinds, declining fundamentals, and critical negative trends."
     },
     {
       id: "risk",
-      icon: <ShieldAlert size={28} className="feature-icon" />,
+      icon: '[RISK]',
       title: "RISK AGENT",
       desc: "Monitors supply chain vulnerabilities, regulatory exposure, currency headwinds, and black swan potential."
     }

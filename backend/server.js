@@ -11,7 +11,7 @@ const { runBearAgent } = require('./agents/bear');
 const { runRiskAgent } = require('./agents/risk');
 const { runMediatorAgent } = require('./agents/mediator');
 const { runDebate } = require('./agents/debate');
-const { callLLMJson } = require('./agents/llm');
+const { callLLMJson, callLLMJsonWithOptions } = require('./agents/llm');
 const {
   saveSignal, saveDebateTurn, saveDebateSummary,
   loadTrackedStocks, upsertTrackedStock, removeTrackedStock,
@@ -203,7 +203,13 @@ Return ONLY valid JSON:
     const historyLines = history.map((m) => `${m.role === 'user' ? 'User' : 'Mediator'}: ${m.content}`).join('\n');
     const userPrompt = historyLines ? `${historyLines}\nUser: ${message}` : `User: ${message}`;
 
-    const llmResult = await callLLMJson(systemPrompt, userPrompt, 10000);
+    let chatProvider = (process.env.CHAT_LLM_PROVIDER || 'featherless').toLowerCase();
+    if (chatProvider === 'featherless' && (!process.env.FEATHERLESS_KEY || !process.env.FEATHERLESS_MODEL)) {
+      console.warn('[Chat] Featherless not fully configured, falling back to Groq for /chat');
+      chatProvider = 'groq';
+    }
+
+    const llmResult = await callLLMJsonWithOptions(systemPrompt, userPrompt, 10000, { provider: chatProvider });
 
     saveChatMessage({ ticker, role: 'user', content: message }).catch((e) => console.warn('[DB] saveChatMessage user:', e.message));
     saveChatMessage({ ticker, role: 'assistant', content: llmResult.response }).catch((e) => console.warn('[DB] saveChatMessage assistant:', e.message));
@@ -221,7 +227,7 @@ Return ONLY valid JSON:
 
 // ─── POST /track ──────────────────────────────────────────────────────────────
 app.post('/track', (req, res) => {
-  const { ticker, verdict, confidence, rationale, trigger, sources } = req.body;
+  const { ticker, verdict, confidence, rationale, trigger, sources, buyBelowPrice } = req.body;
   if (!ticker) return res.status(400).json({ error: 'ticker is required' });
 
   if (!trackedStocks.find((s) => s.ticker === ticker)) {
@@ -234,13 +240,31 @@ app.post('/track', (req, res) => {
       rationale: rationale || 'Waiting for next analysis cycle.',
       trigger: trigger || 'Awaiting conditions.',
       sources: sources || [],
+      buyBelowPrice: buyBelowPrice != null ? Number(buyBelowPrice) : null,
+      buyAlertTriggered: false,
     };
     trackedStocks.push(stock);
     upsertTrackedStock(stock).catch((e) => console.warn('[DB] upsertTrackedStock:', e.message));
-    console.log(`[Monitor] Tracking ${ticker}`);
+    console.log(`[Monitor] Tracking ${ticker}${buyBelowPrice ? ` (alert below $${buyBelowPrice})` : ''}`);
     broadcast({ type: 'alerts_update', stocks: trackedStocks, new_alerts: [] });
   }
   res.json({ status: 'ok', trackedStocks });
+});
+
+// ─── PUT /track/alert — update buy-below price on tracked stock ──────────────
+app.put('/track/alert', (req, res) => {
+  const { ticker, buyBelowPrice } = req.body;
+  if (!ticker) return res.status(400).json({ error: 'ticker is required' });
+
+  const stock = trackedStocks.find((s) => s.ticker === ticker.toUpperCase());
+  if (!stock) return res.status(404).json({ error: `${ticker} is not tracked` });
+
+  stock.buyBelowPrice = buyBelowPrice != null ? Number(buyBelowPrice) : null;
+  stock.buyAlertTriggered = false; // reset so alert fires again with new price
+  upsertTrackedStock(stock).catch((e) => console.warn('[DB] upsertTrackedStock alert:', e.message));
+  broadcast({ type: 'alerts_update', stocks: trackedStocks, new_alerts: [] });
+  console.log(`[Monitor] Updated price alert for ${stock.ticker}: ${stock.buyBelowPrice ? `$${stock.buyBelowPrice}` : 'removed'}`);
+  res.json({ status: 'ok', stock });
 });
 
 // ─── DELETE /track/:ticker ────────────────────────────────────────────────────
@@ -334,6 +358,17 @@ cron.schedule('*/1 * * * *', async () => {
             });
           }
 
+          // Buy-below price alert check
+          if (stock.buyBelowPrice && newPrice > 0 && newPrice <= stock.buyBelowPrice && !stock.buyAlertTriggered) {
+            stock.buyAlertTriggered = true;
+            newAlerts.push({
+              ticker: stock.ticker,
+              type: 'buy_signal',
+              message: `🚨 BUY ALERT: ${stock.ticker} is now $${newPrice.toFixed(2)}, below your target of $${stock.buyBelowPrice.toFixed(2)}!`,
+            });
+            console.log(`[Alert] Buy signal for ${stock.ticker}: $${newPrice.toFixed(2)} < $${stock.buyBelowPrice.toFixed(2)}`);
+          }
+
           stock.price = newPrice;
           stock.change = newChange;
 
@@ -371,6 +406,8 @@ server.listen(PORT, async () => {
       rationale: row.rationale || '',
       trigger: row.trigger || '',
       sources: row.sources || [],
+      buyBelowPrice: row.buy_below_price != null ? Number(row.buy_below_price) : null,
+      buyAlertTriggered: false,
     }));
     console.log(`[DB] Loaded ${stored.length} tracked stock(s) from Supabase`);
   } catch (e) {

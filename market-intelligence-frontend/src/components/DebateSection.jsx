@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 
 const AGENT_COLORS = {
   bull: '#6aab8e',
@@ -8,9 +7,9 @@ const AGENT_COLORS = {
 };
 
 const AGENT_DISPLAY = {
-  bull: { title: 'GROWTH OPPORTUNITY ANALYST', short: 'GROWTH', icon: '📈' },
-  bear: { title: 'DOWNSIDE RISK ANALYST',      short: 'DOWNSIDE', icon: '📉' },
-  risk: { title: 'VOLATILITY OFFICER',          short: 'VOLATILITY', icon: '⚠️' },
+  bull: { title: 'GROWTH OPPORTUNITY ANALYST', short: 'GROWTH' },
+  bear: { title: 'DOWNSIDE RISK ANALYST',      short: 'DOWNSIDE' },
+  risk: { title: 'VOLATILITY OFFICER',          short: 'VOLATILITY' },
 };
 
 const TURN_TYPE_LABELS = {
@@ -45,9 +44,6 @@ function DebateTurnCard({ turn, articles }) {
     <div className="debate-turn-card" style={{ borderLeftColor: agentColor }}>
       <div className="debate-turn-header">
         <div className="debate-turn-meta">
-          <span className="debate-agent-avatar" style={{ background: agentColor }}>
-            {AGENT_DISPLAY[turn.agent]?.icon || turn.agent[0].toUpperCase()}
-          </span>
           <span className="debate-agent-name" style={{ color: agentColor }}>
             {AGENT_DISPLAY[turn.agent]?.title || turn.agent.toUpperCase()}
           </span>
@@ -77,7 +73,7 @@ function DebateTurnCard({ turn, articles }) {
       {items.length > 0 && (
         <button className="debate-expand-btn" onClick={() => setExpanded(!expanded)}>
           {expanded ? 'HIDE' : 'SHOW'} {items.length} {turn.attacks ? 'ATTACK' : 'POINT'}{items.length !== 1 ? 'S' : ''}
-          {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          {expanded ? '▲' : '▼'}
         </button>
       )}
 
@@ -106,7 +102,7 @@ function DebateTurnCard({ turn, articles }) {
                       const art = getArticle(srcId);
                       return art ? (
                         <a key={j} href={art.url} target="_blank" rel="noopener noreferrer" className="debate-source-chip">
-                          [{srcId}] {art.publisher} <ExternalLink size={10} />
+                          [{srcId}] {art.publisher} →
                         </a>
                       ) : (
                         <span key={j} className="debate-source-chip">[{srcId}]</span>
@@ -210,7 +206,7 @@ function SynthesisTab({ debateComplete }) {
         <div className="synthesis-outcome-item">
           <span className="synthesis-outcome-label">DEBATE WINNER</span>
           <span className="synthesis-outcome-value" style={{ color: AGENT_COLORS[debate_winner] || '#fff', fontSize: '0.85rem' }}>
-            {AGENT_DISPLAY[debate_winner]?.icon} {AGENT_DISPLAY[debate_winner]?.short || debate_winner?.toUpperCase()}
+            {AGENT_DISPLAY[debate_winner]?.short || debate_winner?.toUpperCase()}
           </span>
         </div>
         <div className="synthesis-outcome-item">
