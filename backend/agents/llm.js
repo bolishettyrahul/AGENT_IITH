@@ -4,28 +4,50 @@ require('dotenv').config();
 // Groq — OpenAI-compatible, free tier, high rate limits, fast LPU hardware
 const GROQ_BASE = 'https://api.groq.com/openai/v1';
 
-async function callLLM(systemPrompt, userPrompt) {
-  const response = await axios.post(
-    `${GROQ_BASE}/chat/completions`,
-    {
-      model: process.env.GROQ_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 1024,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.GROQ_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 30000,
-    }
-  );
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  return response.data.choices[0].message.content;
+// callLLM runs per-agent (agents still launch in parallel via Promise.allSettled in server.js)
+// This only retries the individual call if Groq returns 429
+async function callLLM(systemPrompt, userPrompt) {
+  const MAX_RETRIES = 4;
+  let delay = 8000;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await axios.post(
+        `${GROQ_BASE}/chat/completions`,
+        {
+          model: process.env.GROQ_MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 800,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.GROQ_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        }
+      );
+      return response.data.choices[0].message.content;
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 429 && attempt < MAX_RETRIES) {
+        const retryAfter = err.response?.headers?.['retry-after'];
+        const suggested = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
+        const waitMs = Math.min(suggested, 60000); // cap at 60s — fail fast if badly throttled
+        console.warn(`[LLM] 429 — waiting ${waitMs}ms (attempt ${attempt}/${MAX_RETRIES})`);
+        await sleep(waitMs);
+        delay *= 2;
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 /**

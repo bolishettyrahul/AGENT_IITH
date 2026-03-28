@@ -13,6 +13,10 @@ const YF_HEADERS = {
 /**
  * Primary: Yahoo Finance JSON API — fast, no JS rendering required.
  * Fallback: Bright Data Scraping Browser (puppeteer-core) — used if JSON API fails.
+ *
+ * Returns: { newsText: string, articles: Article[] }
+ *   where Article = { id, title, summary, publisher, url }
+ *   Source IDs like [S1], [S2] are embedded inline in newsText for LLM attribution.
  */
 async function scrapeYahooFinance(ticker) {
   try {
@@ -52,6 +56,15 @@ async function scrapeViaJsonApi(ticker) {
     throw new Error('No data returned from Yahoo Finance JSON API');
   }
 
+  // Build structured articles array with source IDs
+  const articles = news.map((item, idx) => ({
+    id: `S${idx + 1}`,
+    title: item.title || 'Untitled',
+    summary: item.summary || '',
+    publisher: item.publisher || 'Unknown',
+    url: item.link || item.url || '',
+  }));
+
   const lines = [];
 
   // Price context
@@ -68,19 +81,20 @@ async function scrapeViaJsonApi(ticker) {
     lines.push('');
   }
 
-  lines.push(`=== ${ticker} Recent News ===`);
-  if (news.length === 0) {
+  lines.push(`=== ${ticker} Recent News (with Source IDs for attribution) ===`);
+  if (articles.length === 0) {
     lines.push('No recent news found.');
   } else {
-    for (const item of news) {
-      lines.push(`• ${item.title}`);
-      if (item.summary) lines.push(`  ${item.summary}`);
-      if (item.publisher) lines.push(`  Source: ${item.publisher}`);
+    for (const article of articles) {
+      lines.push(`[${article.id}] ${article.title}`);
+      if (article.summary) lines.push(`  ${article.summary}`);
+      if (article.publisher) lines.push(`  Source: ${article.publisher}`);
       lines.push('');
     }
   }
 
-  return lines.join('\n').slice(0, 8000);
+  const newsText = lines.join('\n').slice(0, 8000);
+  return { newsText, articles };
 }
 
 // ─── Fallback: Bright Data Scraping Browser (puppeteer-core) ────────────────
@@ -111,7 +125,26 @@ async function scrapeViaBrowserApi(ticker) {
 
     // Pull all visible text — clean and slice for LLM
     const text = await page.evaluate(() => document.body.innerText);
-    return text.replace(/\s{3,}/g, '\n\n').slice(0, 8000);
+    const cleanText = text.replace(/\s{3,}/g, '\n\n').slice(0, 8000);
+
+    // Extract headline-like lines from the browser scrape to build articles
+    const headlineLines = cleanText.split('\n').filter(l => l.trim().length > 20 && l.trim().length < 200);
+    const articles = headlineLines.slice(0, 15).map((line, idx) => ({
+      id: `S${idx + 1}`,
+      title: line.trim(),
+      summary: '',
+      publisher: 'Yahoo Finance',
+      url: `https://finance.yahoo.com/quote/${ticker}/news/`,
+    }));
+
+    // Re-tag the text with source IDs for attribution
+    let taggedText = `=== ${ticker} Recent News (with Source IDs for attribution) ===\n`;
+    for (const article of articles) {
+      taggedText += `[${article.id}] ${article.title}\n`;
+    }
+    taggedText += '\n' + cleanText;
+
+    return { newsText: taggedText.slice(0, 8000), articles };
   } finally {
     if (browser) await browser.close();
   }
