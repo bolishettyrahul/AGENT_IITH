@@ -11,6 +11,8 @@ const AGENT_TITLES = {
 
 export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], targetTicker = '' }) {
   const [tickerInput, setTickerInput] = useState("");
+  const [showTrackModal, setShowTrackModal] = useState(false);
+  const [buyBelowPrice, setBuyBelowPrice] = useState('');
 
   useEffect(() => {
     if (targetTicker) setTickerInput(targetTicker);
@@ -279,6 +281,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
   };
 
   const handleTrackStock = async () => {
+    const priceNum = parseFloat(buyBelowPrice);
     try {
        await fetch(`${HTTP_URL}/track`, {
          method: "POST",
@@ -289,9 +292,12 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
            confidence: results.mediator?.confidence,
            rationale: results.mediator?.rationale,
            trigger: results.mediator?.trigger,
-           sources: sourceArticles
+           sources: sourceArticles,
+           buyBelowPrice: !isNaN(priceNum) && priceNum > 0 ? priceNum : null,
          })
        });
+       setShowTrackModal(false);
+       setBuyBelowPrice('');
        onViewTracked(); // Switch view
     } catch (e) {
        console.error(e);
@@ -609,10 +615,104 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
 
               {!trackedStocks.find(s => s.ticker === tickerInput.toUpperCase().trim()) && (
                 <div style={{ marginTop: '2rem' }}>
-                  <button className="btn-primary" onClick={handleTrackStock} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#6aab8e', border: '1px solid #6aab8e' }}>
+                  <button className="btn-primary" onClick={() => setShowTrackModal(true)} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#6aab8e', border: '1px solid #6aab8e' }}>
                     [NEW]
                     TRACK STOCK VIRTUALLY
                   </button>
+                </div>
+              )}
+
+              {/* Price Alert Modal */}
+              {showTrackModal && (
+                <div style={{
+                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                  background: 'rgba(0,0,0,0.85)', zIndex: 9999,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                  animation: 'fadeIn 0.2s ease'
+                }} onClick={() => { setShowTrackModal(false); setBuyBelowPrice(''); }}>
+                  <div style={{
+                    background: 'linear-gradient(145deg, #111111, #0a0a0a)',
+                    border: '1px solid rgba(106,171,142,0.3)',
+                    borderRadius: '1.25rem',
+                    padding: '2.5rem',
+                    width: '100%',
+                    maxWidth: '480px',
+                    boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(106,171,142,0.08)',
+                    animation: 'slideUp 0.3s ease'
+                  }} onClick={e => e.stopPropagation()}>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '1.5rem' }}>📊</span>
+                      <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, letterSpacing: '0.05em', color: '#fff' }}>
+                        TRACK {tickerInput.toUpperCase().trim()}
+                      </h3>
+                    </div>
+                    <p style={{ color: '#888', fontSize: '0.875rem', margin: '0 0 2rem', lineHeight: 1.5 }}>
+                      Set a target buy price. You'll get notified when the stock drops below this level.
+                    </p>
+
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#6aab8e', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.625rem' }}>
+                      BUY BELOW PRICE (USD)
+                    </label>
+                    <div style={{
+                      display: 'flex', alignItems: 'center',
+                      background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(106,171,142,0.3)',
+                      borderRadius: '0.625rem', padding: '0 1rem', marginBottom: '0.75rem',
+                      transition: 'border-color 0.2s ease'
+                    }}>
+                      <span style={{ color: '#6aab8e', fontWeight: 700, fontSize: '1.25rem', marginRight: '0.5rem' }}>$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={buyBelowPrice}
+                        onChange={e => setBuyBelowPrice(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleTrackStock()}
+                        placeholder="e.g. 175.00"
+                        autoFocus
+                        style={{
+                          flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                          color: '#fff', fontSize: '1.25rem', fontWeight: 600,
+                          padding: '1rem 0', fontFamily: 'Space Mono, monospace',
+                        }}
+                      />
+                    </div>
+                    <p style={{ color: '#555', fontSize: '0.75rem', margin: '0 0 2rem' }}>
+                      Leave empty to track without a price alert.
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <button
+                        onClick={handleTrackStock}
+                        style={{
+                          flex: 1, padding: '0.875rem',
+                          background: 'linear-gradient(135deg, rgba(106,171,142,0.2), rgba(106,171,142,0.1))',
+                          color: '#6aab8e', border: '1px solid rgba(106,171,142,0.4)',
+                          borderRadius: '0.625rem', cursor: 'pointer',
+                          fontWeight: 800, fontSize: '0.8125rem', letterSpacing: '0.08em',
+                          transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={e => { e.target.style.background = 'rgba(106,171,142,0.25)'; e.target.style.boxShadow = '0 0 20px rgba(106,171,142,0.15)'; }}
+                        onMouseLeave={e => { e.target.style.background = 'linear-gradient(135deg, rgba(106,171,142,0.2), rgba(106,171,142,0.1))'; e.target.style.boxShadow = 'none'; }}
+                      >
+                        CONFIRM & TRACK
+                      </button>
+                      <button
+                        onClick={() => { setShowTrackModal(false); setBuyBelowPrice(''); }}
+                        style={{
+                          padding: '0.875rem 1.5rem',
+                          background: 'transparent', color: '#888',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '0.625rem', cursor: 'pointer',
+                          fontWeight: 700, fontSize: '0.8125rem', letterSpacing: '0.05em',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

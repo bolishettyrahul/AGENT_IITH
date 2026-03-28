@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { HTTP_URL } from '../config';
 
 // Lightweight SVG line chart component — no external libraries
 function PriceChart({ points }) {
@@ -51,6 +52,8 @@ function PriceChart({ points }) {
 export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanalyze }) {
   const [expandedStock, setExpandedStock] = useState(null);
   const [chartData, setChartData] = useState(null);
+  const [showPriceAlertModal, setShowPriceAlertModal] = useState(false);
+  const [editBuyBelow, setEditBuyBelow] = useState('');
 
   useEffect(() => {
     if (!expandedStock) { setChartData(null); return; }
@@ -92,10 +95,21 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
                 {stock.verdict || 'PENDING'}
               </span>
               <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#888' }}>{stock.confidence}% CONFIDENCE</span>
+              {stock.buyBelowPrice && (
+                <span style={{
+                  fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em',
+                  color: stock.price > 0 && stock.price <= stock.buyBelowPrice ? '#6aab8e' : '#c9a050',
+                  background: stock.price > 0 && stock.price <= stock.buyBelowPrice ? 'rgba(106,171,142,0.15)' : 'rgba(201,160,80,0.1)',
+                  padding: '0.25rem 0.75rem', borderRadius: '999px',
+                  border: `1px solid ${stock.price > 0 && stock.price <= stock.buyBelowPrice ? 'rgba(106,171,142,0.3)' : 'rgba(201,160,80,0.2)'}`,
+                }}>
+                  {stock.price > 0 && stock.price <= stock.buyBelowPrice ? '🚨 BUY NOW' : `⚠ BUY BELOW $${stock.buyBelowPrice.toFixed(2)}`}
+                </span>
+              )}
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2.5rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2.5rem', flexWrap: 'wrap' }}>
             <button 
               className="btn-primary" 
               onClick={() => onReanalyze(stock.ticker)} 
@@ -103,10 +117,126 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
             >
               [REFRESH] RE-ANALYZE STOCK
             </button>
+            <button 
+              className="btn-primary" 
+              onClick={() => { setEditBuyBelow(stock.buyBelowPrice ? stock.buyBelowPrice.toString() : ''); setShowPriceAlertModal(true); }} 
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'rgba(201,160,80,0.1)', color: '#c9a050', border: '1px solid rgba(201,160,80,0.4)' }}
+            >
+              {stock.buyBelowPrice ? '[EDIT] UPDATE PRICE ALERT' : '[NEW] SET PRICE ALERT'}
+            </button>
             <button className="btn-primary" onClick={() => setExpandedStock(null)} style={{ padding: '0.75rem 1.5rem', background: 'transparent' }}>
               CLOSE
             </button>
           </div>
+
+          {/* Price Alert Modal */}
+          {showPriceAlertModal && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.85)', zIndex: 10001,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+              animation: 'fadeIn 0.2s ease'
+            }} onClick={() => { setShowPriceAlertModal(false); setEditBuyBelow(''); }}>
+              <div style={{
+                background: 'linear-gradient(145deg, #111111, #0a0a0a)',
+                border: '1px solid rgba(201,160,80,0.3)',
+                borderRadius: '1.25rem',
+                padding: '2.5rem',
+                width: '100%',
+                maxWidth: '480px',
+                boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(201,160,80,0.08)',
+                animation: 'slideUp 0.3s ease'
+              }} onClick={e => e.stopPropagation()}>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>📊</span>
+                  <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, letterSpacing: '0.05em', color: '#fff' }}>
+                    {stock.buyBelowPrice ? 'UPDATE' : 'SET'} PRICE ALERT — {stock.ticker}
+                  </h3>
+                </div>
+                <p style={{ color: '#888', fontSize: '0.875rem', margin: '0 0 0.75rem', lineHeight: 1.5 }}>
+                  {stock.price > 0 ? `Current price: $${stock.price.toFixed(2)}` : 'Current price: loading...'}
+                </p>
+                <p style={{ color: '#666', fontSize: '0.8125rem', margin: '0 0 2rem', lineHeight: 1.5 }}>
+                  You’ll get notified when the stock drops below this level.
+                </p>
+
+                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#c9a050', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.625rem' }}>
+                  BUY BELOW PRICE (USD)
+                </label>
+                <div style={{
+                  display: 'flex', alignItems: 'center',
+                  background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(201,160,80,0.3)',
+                  borderRadius: '0.625rem', padding: '0 1rem', marginBottom: '0.75rem',
+                }}>
+                  <span style={{ color: '#c9a050', fontWeight: 700, fontSize: '1.25rem', marginRight: '0.5rem' }}>$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editBuyBelow}
+                    onChange={e => setEditBuyBelow(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const priceNum = parseFloat(editBuyBelow);
+                        fetch(`${HTTP_URL}/track/alert`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ ticker: stock.ticker, buyBelowPrice: !isNaN(priceNum) && priceNum > 0 ? priceNum : null })
+                        }).then(() => { setShowPriceAlertModal(false); setEditBuyBelow(''); });
+                      }
+                    }}
+                    placeholder="e.g. 175.00"
+                    autoFocus
+                    style={{
+                      flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                      color: '#fff', fontSize: '1.25rem', fontWeight: 600,
+                      padding: '1rem 0', fontFamily: 'Space Mono, monospace',
+                    }}
+                  />
+                </div>
+                <p style={{ color: '#555', fontSize: '0.75rem', margin: '0 0 2rem' }}>
+                  Leave empty to remove the price alert.
+                </p>
+
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button
+                    onClick={() => {
+                      const priceNum = parseFloat(editBuyBelow);
+                      fetch(`${HTTP_URL}/track/alert`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ticker: stock.ticker, buyBelowPrice: !isNaN(priceNum) && priceNum > 0 ? priceNum : null })
+                      }).then(() => { setShowPriceAlertModal(false); setEditBuyBelow(''); });
+                    }}
+                    style={{
+                      flex: 1, padding: '0.875rem',
+                      background: 'linear-gradient(135deg, rgba(201,160,80,0.2), rgba(201,160,80,0.1))',
+                      color: '#c9a050', border: '1px solid rgba(201,160,80,0.4)',
+                      borderRadius: '0.625rem', cursor: 'pointer',
+                      fontWeight: 800, fontSize: '0.8125rem', letterSpacing: '0.08em',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {stock.buyBelowPrice ? 'UPDATE ALERT' : 'SET ALERT'}
+                  </button>
+                  <button
+                    onClick={() => { setShowPriceAlertModal(false); setEditBuyBelow(''); }}
+                    style={{
+                      padding: '0.875rem 1.5rem',
+                      background: 'transparent', color: '#888',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '0.625rem', cursor: 'pointer',
+                      fontWeight: 700, fontSize: '0.8125rem', letterSpacing: '0.05em',
+                    }}
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.3)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '2rem' }}>
             <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '1rem' }}>Price History (1 Month)</span>
@@ -118,6 +248,23 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
               <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action Trigger</span>
               <div style={{ fontSize: '1rem', color: '#b87a7a', fontFamily: 'Space Mono, monospace', marginTop: '0.5rem' }}>{stock.trigger}</div>
             </div>
+
+            {stock.buyBelowPrice && (
+              <div style={{ padding: '1.5rem', background: stock.price > 0 && stock.price <= stock.buyBelowPrice ? 'rgba(106,171,142,0.08)' : 'rgba(201,160,80,0.05)', borderRadius: '0.5rem', border: `1px solid ${stock.price > 0 && stock.price <= stock.buyBelowPrice ? 'rgba(106,171,142,0.25)' : 'rgba(201,160,80,0.15)'}` }}>
+                <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Price Alert Target</span>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Space Mono, monospace', marginTop: '0.5rem', color: stock.price > 0 && stock.price <= stock.buyBelowPrice ? '#6aab8e' : '#c9a050' }}>
+                  Buy below ${stock.buyBelowPrice.toFixed(2)}
+                </div>
+                <div style={{ fontSize: '0.8125rem', color: '#888', marginTop: '0.5rem' }}>
+                  {stock.price > 0 && stock.price <= stock.buyBelowPrice
+                    ? `✅ TRIGGERED — Current price $${stock.price.toFixed(2)} is below your target!`
+                    : stock.price > 0
+                      ? `Waiting — Current price $${stock.price.toFixed(2)} is $${(stock.price - stock.buyBelowPrice).toFixed(2)} above target`
+                      : 'Waiting for price data...'
+                  }
+                </div>
+              </div>
+            )}
 
             <div style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.3)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
               <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Synthesized Rationale</span>
@@ -211,6 +358,16 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
                       {isUp ? '▲' : '▼'} {Math.abs(stock.change || 0).toFixed(2)}%
                     </span>
                   </div>
+
+                  {stock.buyBelowPrice && (
+                    <div style={{
+                      fontSize: '0.75rem', fontWeight: 700,
+                      color: stock.price > 0 && stock.price <= stock.buyBelowPrice ? '#6aab8e' : '#c9a050',
+                      display: 'flex', alignItems: 'center', gap: '0.375rem',
+                    }}>
+                      {stock.price > 0 && stock.price <= stock.buyBelowPrice ? '🚨' : '⚠'} Buy below ${stock.buyBelowPrice.toFixed(2)}
+                    </div>
+                  )}
 
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem', marginTop: 'auto' }}>
                     <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent Alert Log</span>

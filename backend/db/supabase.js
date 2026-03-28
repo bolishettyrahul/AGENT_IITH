@@ -72,6 +72,7 @@ async function upsertTrackedStock(stock) {
       price: stock.price,
       change_pct: stock.change,
       sources: stock.sources || [],
+      buy_below_price: stock.buyBelowPrice != null ? stock.buyBelowPrice : null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'ticker' }
