@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink, Bell } from 'lucide-react';
 import DebateSection from './DebateSection';
 
-export default function Dashboard({ onHome }) {
+export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], targetTicker = '' }) {
   const [tickerInput, setTickerInput] = useState("");
+
+  useEffect(() => {
+    if (targetTicker) setTickerInput(targetTicker);
+  }, [targetTicker]);
+
   const [persona, setPersona] = useState("balanced");
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
@@ -240,6 +245,26 @@ export default function Dashboard({ onHome }) {
     }, 1500);
   };
 
+  const handleTrackStock = async () => {
+    try {
+       await fetch("http://localhost:3001/track", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ 
+           ticker: tickerInput.toUpperCase().trim(),
+           verdict: results.mediator?.decision,
+           confidence: results.mediator?.confidence,
+           rationale: results.mediator?.rationale,
+           trigger: results.mediator?.trigger,
+           sources: sourceArticles
+         })
+       });
+       onViewTracked(); // Switch view
+    } catch (e) {
+       console.error(e);
+    }
+  };
+
   // Resolve a source ID to its article object
   const getArticle = (sourceId) => {
     return sourceArticles.find(a => a.id === sourceId);
@@ -414,7 +439,15 @@ export default function Dashboard({ onHome }) {
         <div className="navbar-brand" onClick={onHome} style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
           <ArrowLeft size={16}/> MARKET.INTEL
         </div>
-        <div className="navbar-status">
+        <div className="navbar-status" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button
+            className="status-indicator"
+            onClick={onViewTracked}
+            style={{ cursor: 'pointer', background: 'transparent', border: '1px solid var(--border-color)', color: '#10b981', fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.08em' }}
+          >
+            <Bell size={12} style={{ display: 'inline-block', marginRight: '4px', marginBottom: '-2px' }} />
+            TRACKED ({trackedStocks.length})
+          </button>
           {loading ? (
             <span className="status-indicator loading">DELIBERATING</span>
           ) : wsConnected ? (
@@ -533,6 +566,15 @@ export default function Dashboard({ onHome }) {
                   </span>
                 )}
               </div>
+
+              {!trackedStocks.find(s => s.ticker === tickerInput.toUpperCase().trim()) && (
+                <div style={{ marginTop: '2rem' }}>
+                  <button className="btn-primary" onClick={handleTrackStock} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#10b981', border: '1px solid #10b981' }}>
+                    <Bell size={16} style={{ display: 'inline', marginRight: '0.5rem', marginBottom: '-2px' }} />
+                    TRACK STOCK VIRTUALLY
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Interactive User Response Field */}

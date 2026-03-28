@@ -54,6 +54,76 @@ function broadcast(data) {
   }
 }
 
+const cron = require('node-cron');
+
+const trackedStocks = [];
+
+// POST /track — start tracking a stock
+app.post('/track', (req, res) => {
+  const { ticker, verdict, confidence, rationale, trigger, sources } = req.body;
+  if (!ticker) return res.status(400).json({ error: 'ticker is required' });
+  
+  if (!trackedStocks.find(s => s.ticker === ticker)) {
+    trackedStocks.push({ 
+      ticker, 
+      price: 0, 
+      change: 0, 
+      verdict: verdict || 'PENDING', 
+      confidence: confidence || 0,
+      rationale: rationale || 'Waiting for next analysis cycle.',
+      trigger: trigger || 'Awaiting conditions.',
+      sources: sources || []
+    });
+    console.log(`[Monitor] Unlocked tracking for ${ticker}`);
+    broadcast({ type: 'alerts_update', stocks: trackedStocks, new_alerts: [] });
+  }
+  res.json({ status: 'ok', trackedStocks });
+});
+
+app.get('/tracked', (req, res) => {
+  res.json({ stocks: trackedStocks });
+});
+
+// Scheduled monitoring worker (runs every 1 minute for demo purposes, originally requested 5 min)
+cron.schedule('*/1 * * * *', async () => {
+  if (trackedStocks.length === 0) return;
+  console.log('[Worker] Running background monitoring for tracked stocks...');
+  
+  const newAlerts = [];
+  
+  for (let i = 0; i < trackedStocks.length; i++) {
+    const stock = trackedStocks[i];
+    try {
+      // Light re-analysis via existing pipeline primitives just to get fresh data
+      const scraperResult = await scrapeYahooFinance(stock.ticker);
+      
+      // We parse the exact price and change from the scraper text
+      const priceRally = scraperResult.newsText.match(/Current Price: \$([\d.]+)/);
+      const changeRally = scraperResult.newsText.match(/Change: ([\d.-]+)%/);
+      
+      const newPrice = priceRally ? parseFloat(priceRally[1]) : stock.price;
+      const newChange = changeRally ? parseFloat(changeRally[1]) : stock.change;
+      
+      // Detect anomalies for alerts
+      if (stock.price > 0 && Math.abs(newChange) > 2.0 && stock.change !== newChange) {
+        newAlerts.push({
+          ticker: stock.ticker,
+          message: `Volatility alert: Price moved ${newChange.toFixed(2)}% in active trading session.`
+        });
+      }
+      
+      // Update store
+      stock.price = newPrice;
+      stock.change = newChange;
+      
+    } catch (e) {
+      console.warn(`[Worker] Failed tracking ${stock.ticker}`, e.message);
+    }
+  }
+  
+  broadcast({ type: 'alerts_update', stocks: trackedStocks, new_alerts: newAlerts });
+});
+
 // POST /analyze — accepts { ticker, persona }
 app.post('/analyze', async (req, res) => {
   const { ticker, persona = 'balanced' } = req.body;
