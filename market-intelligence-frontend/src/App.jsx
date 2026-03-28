@@ -3,7 +3,7 @@ import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
 import TrackedStocks from './components/TrackedStocks';
 import LiveTicker from './components/LiveTicker';
-import { ArrowLeft, Bell } from 'lucide-react';
+import { HTTP_URL, WS_URL } from './config';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('landing'); // 'landing', 'dashboard', 'tracked'
@@ -16,9 +16,11 @@ export default function App() {
     // Global WebSocket for alerts & ticker updates
     let ws;
     let reconnectTimeout;
-    
+    let backoff = 1000;
+    const MAX_BACKOFF = 30000;
+
     const connectWS = () => {
-      ws = new WebSocket('ws://localhost:3001');
+      ws = new WebSocket(WS_URL);
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -38,15 +40,19 @@ export default function App() {
         }
       };
       
+      ws.onopen = () => { backoff = 1000; };
       ws.onclose = () => {
-        reconnectTimeout = setTimeout(connectWS, 4000);
+        reconnectTimeout = setTimeout(() => {
+          backoff = Math.min(backoff * 2, MAX_BACKOFF);
+          connectWS();
+        }, backoff);
       };
     };
 
     connectWS();
     
     // Fetch initial list of tracked stocks
-    fetch('http://localhost:3001/tracked')
+    fetch(`${HTTP_URL}/tracked`)
       .then(res => res.json())
       .then(data => setTrackedStocks(data.stocks || []))
       .catch(err => console.error('Failed to fetch tracked stocks', err));

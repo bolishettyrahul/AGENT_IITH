@@ -1,14 +1,46 @@
 const axios = require('axios');
 require('dotenv').config();
 
-// Groq — OpenAI-compatible, free tier, high rate limits, fast LPU hardware
 const GROQ_BASE = 'https://api.groq.com/openai/v1';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// callLLM runs per-agent (agents still launch in parallel via Promise.allSettled in server.js)
-// This only retries the individual call if Groq returns 429
-async function callLLM(systemPrompt, userPrompt) {
+/**
+ * Extract the last complete JSON object from a string using bracket-depth counting.
+ * Handles LLM preamble text before/after the JSON block.
+ */
+function extractLastJson(text) {
+  let lastStart = -1;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') {
+      if (depth === 0) lastStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && lastStart !== -1) {
+        const candidate = text.slice(lastStart, i + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          lastStart = -1; // malformed — keep scanning
+        }
+      }
+    }
+  }
+  throw new Error('No valid JSON object found in response');
+}
+
+async function callLLM(systemPrompt, userPrompt, timeout = 15000) {
   const MAX_RETRIES = 3;
   let delay = 3000;
 
@@ -30,7 +62,7 @@ async function callLLM(systemPrompt, userPrompt) {
             Authorization: `Bearer ${process.env.GROQ_KEY}`,
             'Content-Type': 'application/json',
           },
-          timeout: 15000,
+          timeout,
         }
       );
       return response.data.choices[0].message.content;
@@ -39,7 +71,7 @@ async function callLLM(systemPrompt, userPrompt) {
       if (status === 429 && attempt < MAX_RETRIES) {
         const retryAfter = err.response?.headers?.['retry-after'];
         const suggested = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
-        const waitMs = Math.min(suggested, 30000); // cap at 30s — fail fast if badly throttled
+        const waitMs = Math.min(suggested, 12000); // cap at 12s for demo
         console.warn(`[LLM] 429 — waiting ${waitMs}ms (attempt ${attempt}/${MAX_RETRIES})`);
         await sleep(waitMs);
         delay *= 2;
@@ -50,19 +82,13 @@ async function callLLM(systemPrompt, userPrompt) {
   }
 }
 
-/**
- * Call LLM and parse JSON from the response.
- * Retries once with a stricter JSON-only reminder if parsing fails.
- */
-async function callLLMJson(systemPrompt, userPrompt) {
+async function callLLMJson(systemPrompt, userPrompt, timeout = 15000) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     const extra = attempt === 2 ? '\n\nReturn ONLY JSON, nothing else.' : '';
-    const raw = await callLLM(systemPrompt, userPrompt + extra);
+    const raw = await callLLM(systemPrompt, userPrompt + extra, timeout);
 
     try {
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('No JSON object found');
-      return JSON.parse(match[0]);
+      return extractLastJson(raw);
     } catch {
       if (attempt === 2) throw new Error(`JSON parse failed after retry. Raw: ${raw}`);
     }

@@ -197,7 +197,7 @@ ${bullResult.reasons.map((r) => `[${r.sources?.join(',')}] ${r.text}`).join('\n'
 
 Available sources: ${newsRef}`;
 
-    const bullRebuttal = await callLLMJson(BULL_REBUTTAL_SYSTEM, bullRebuttalUser).catch((e) => {
+    const bullRebuttal = await callLLMJson(BULL_REBUTTAL_SYSTEM, bullRebuttalUser, 8000).catch((e) => {
       console.error('[Debate][Bull rebuttal failed]', e.message);
       return null;
     });
@@ -249,7 +249,7 @@ ${bearResult.reasons.map((r) => `[${r.sources?.join(',')}] ${r.text}`).join('\n'
 
 Available sources: ${newsRef}`;
 
-    const bearRebuttal = await callLLMJson(BEAR_REBUTTAL_SYSTEM, bearRebuttalUser).catch((e) => {
+    const bearRebuttal = await callLLMJson(BEAR_REBUTTAL_SYSTEM, bearRebuttalUser, 8000).catch((e) => {
       console.error('[Debate][Bear rebuttal failed]', e.message);
       return null;
     });
@@ -302,7 +302,7 @@ ${targetResult.reasons.map((r) => `[${r.sources?.join(',')}] ${r.text}`).join('\
 
 Available sources: ${newsRef}`;
 
-    const riskAttack = await callLLMJson(buildRiskDevilSystem(targetAgent), riskAttackUser).catch((e) => {
+    const riskAttack = await callLLMJson(buildRiskDevilSystem(targetAgent), riskAttackUser, 8000).catch((e) => {
       console.error('[Debate][Risk attack failed]', e.message);
       return null;
     });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink, Bell } from 'lucide-react';
 import DebateSection from './DebateSection';
+import { HTTP_URL, WS_URL } from '../config';
 
 export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], targetTicker = '' }) {
   const [tickerInput, setTickerInput] = useState("");
@@ -14,6 +15,8 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
   const [wsConnected, setWsConnected] = useState(false);
   const [errorState, setErrorState] = useState(null);
   const [userResponse, setUserResponse] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [analysisId, setAnalysisId] = useState(0);
   const [chatLogs, setChatLogs] = useState([]);
   const [sourceArticles, setSourceArticles] = useState([]);
   
@@ -33,9 +36,11 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
 
   useEffect(() => {
     let reconnectTimer;
+    let backoff = 1000;
+    const MAX_BACKOFF = 30000;
     const connectWS = () => {
-      const socket = new WebSocket("ws://localhost:3001");
-      socket.onopen = () => { setWsConnected(true); setErrorState(null); };
+      const socket = new WebSocket(WS_URL);
+      socket.onopen = () => { backoff = 1000; setWsConnected(true); setErrorState(null); };
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -69,11 +74,12 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
       };
       socket.onclose = () => {
         setWsConnected(false);
-        reconnectTimer = setTimeout(connectWS, 3000);
+        reconnectTimer = setTimeout(() => {
+          backoff = Math.min(backoff * 2, MAX_BACKOFF);
+          connectWS();
+        }, backoff);
       };
-      socket.onerror = (err) => {
-        // We will mock silently if it fails, but track it
-      };
+      socket.onerror = () => {};
       wsRef.current = socket;
     };
 
@@ -205,9 +211,16 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
   };
 
   const handleAnalyze = async () => {
-    if (!tickerInput.trim() || loading) return;
+    const ticker = tickerInput.trim().toUpperCase();
+    if (!ticker || loading) return;
+    if (!/^[A-Z0-9.^-]{1,10}$/.test(ticker)) {
+      setErrorState('Invalid ticker symbol. Use 1–10 characters (e.g. AAPL, BRK.B).');
+      return;
+    }
+    setAnalysisId(prev => prev + 1);
     setLoading(true);
     setErrorState(null);
+    setChatLogs([]);
     setSourceArticles([]);
     setResults({ bull: null, bear: null, risk: null, mediator: null });
     setIsDebating(false);
@@ -216,10 +229,10 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
     setDebateComplete(null);
 
     try {
-      const res = await fetch("http://localhost:3001/analyze", {
+      const res = await fetch(`${HTTP_URL}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: tickerInput.toUpperCase().trim(), persona })
+        body: JSON.stringify({ ticker, persona })
       });
       if (!res.ok) throw new Error("Backend API returned " + res.status);
     } catch (err) {
@@ -233,21 +246,35 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
     if (e.key === 'Enter') handleAnalyze();
   };
 
-  const handleSendResponse = () => {
-    if (!userResponse.trim()) return;
-    setChatLogs([...chatLogs, { sender: 'You', text: userResponse }]);
+  const handleSendResponse = async () => {
+    const message = userResponse.trim();
+    if (!message || chatLoading) return;
+    setChatLogs(prev => [...prev, { sender: 'You', text: message }]);
     setUserResponse('');
-    setTimeout(() => {
-      setChatLogs(prev => [...prev, { 
-        sender: 'Mediator', 
-        text: "Parameters adjusted. Monitoring data feeds with new constraints..." 
-      }]);
-    }, 1500);
+    setChatLoading(true);
+    try {
+      const res = await fetch(`${HTTP_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: tickerInput.toUpperCase().trim(),
+          message,
+          agentResults: results,
+          persona,
+        }),
+      });
+      const data = await res.json();
+      setChatLogs(prev => [...prev, { sender: 'Mediator', text: data.response || 'No response.' }]);
+    } catch {
+      setChatLogs(prev => [...prev, { sender: 'Mediator', text: 'Unable to process your constraint at this time.' }]);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   const handleTrackStock = async () => {
     try {
-       await fetch("http://localhost:3001/track", {
+       await fetch(`${HTTP_URL}/track`, {
          method: "POST",
          headers: { "Content-Type": "application/json" },
          body: JSON.stringify({ 
@@ -268,15 +295,6 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
   // Resolve a source ID to its article object
   const getArticle = (sourceId) => {
     return sourceArticles.find(a => a.id === sourceId);
-  };
-
-  // Weight badge colors
-  const getWeightColor = (weight) => {
-    const w = (weight || '').toUpperCase();
-    if (w === 'HIGH') return '#ef4444';
-    if (w === 'MEDIUM') return '#f59e0b';
-    if (w === 'LOW') return '#6b7280';
-    return '#888';
   };
 
   const AgentColumn = ({ title, agentKey }) => {
@@ -585,7 +603,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
             </div>
 
             {/* Interactive User Response Field */}
-            <div className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem' }}>
+            <div key={analysisId} className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem' }}>
               <h4 style={{fontSize: '0.875rem', fontWeight: 800, marginBottom: '1.5rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em'}}>
                 Adjust Agent Constraints & Respond
               </h4>
@@ -611,8 +629,8 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                   onChange={e => setUserResponse(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSendResponse()}
                 />
-                <button className="btn-primary" onClick={handleSendResponse} style={{padding: '1rem 2.5rem', fontSize: '1rem'}}>
-                  SEND
+                <button className="btn-primary" onClick={handleSendResponse} disabled={chatLoading} style={{padding: '1rem 2.5rem', fontSize: '1rem'}}>
+                  {chatLoading ? 'SENDING...' : 'SEND'}
                 </button>
               </div>
             </div>
