@@ -2,6 +2,7 @@ const axios = require('axios');
 require('dotenv').config();
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1';
+const FEATHERLESS_BASE = process.env.FEATHERLESS_BASE || 'https://api.featherless.ai/v1';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -41,15 +42,43 @@ function extractLastJson(text) {
 }
 
 async function callLLM(systemPrompt, userPrompt, timeout = 15000) {
+  return callLLMWithOptions(systemPrompt, userPrompt, timeout, {});
+}
+
+function resolveProviderConfig(options = {}) {
+  const provider = (options.provider || process.env.LLM_PROVIDER || 'groq').toLowerCase();
+
+  if (provider === 'featherless') {
+    const apiKey = options.apiKey || process.env.FEATHERLESS_KEY;
+    const model = options.model || process.env.FEATHERLESS_MODEL;
+    const baseUrl = options.baseUrl || FEATHERLESS_BASE;
+    return { provider, apiKey, model, baseUrl };
+  }
+
+  if (provider === 'groq') {
+    const apiKey = options.apiKey || process.env.GROQ_KEY;
+    const model = options.model || process.env.GROQ_MODEL;
+    const baseUrl = options.baseUrl || GROQ_BASE;
+    return { provider, apiKey, model, baseUrl };
+  }
+
+  throw new Error(`[LLM] Unsupported provider: ${provider}`);
+}
+
+async function callLLMWithOptions(systemPrompt, userPrompt, timeout = 15000, options = {}) {
   const MAX_RETRIES = 3;
   let delay = 3000;
+  const { provider, apiKey, model, baseUrl } = resolveProviderConfig(options);
+
+  if (!apiKey) throw new Error(`[LLM] Missing API key for provider: ${provider}`);
+  if (!model) throw new Error(`[LLM] Missing model for provider: ${provider}`);
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await axios.post(
-        `${GROQ_BASE}/chat/completions`,
+        `${baseUrl}/chat/completions`,
         {
-          model: process.env.GROQ_MODEL,
+          model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
@@ -59,7 +88,7 @@ async function callLLM(systemPrompt, userPrompt, timeout = 15000) {
         },
         {
           headers: {
-            Authorization: `Bearer ${process.env.GROQ_KEY}`,
+            Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
           timeout,
@@ -72,7 +101,7 @@ async function callLLM(systemPrompt, userPrompt, timeout = 15000) {
         const retryAfter = err.response?.headers?.['retry-after'];
         const suggested = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
         const waitMs = Math.min(suggested, 12000); // cap at 12s for demo
-        console.warn(`[LLM] 429 — waiting ${waitMs}ms (attempt ${attempt}/${MAX_RETRIES})`);
+        console.warn(`[LLM][${provider}] 429 - waiting ${waitMs}ms (attempt ${attempt}/${MAX_RETRIES})`);
         await sleep(waitMs);
         delay *= 2;
         continue;
@@ -83,9 +112,13 @@ async function callLLM(systemPrompt, userPrompt, timeout = 15000) {
 }
 
 async function callLLMJson(systemPrompt, userPrompt, timeout = 15000) {
+  return callLLMJsonWithOptions(systemPrompt, userPrompt, timeout, {});
+}
+
+async function callLLMJsonWithOptions(systemPrompt, userPrompt, timeout = 15000, options = {}) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     const extra = attempt === 2 ? '\n\nReturn ONLY JSON, nothing else.' : '';
-    const raw = await callLLM(systemPrompt, userPrompt + extra, timeout);
+    const raw = await callLLMWithOptions(systemPrompt, userPrompt + extra, timeout, options);
 
     try {
       return extractLastJson(raw);
@@ -95,4 +128,4 @@ async function callLLMJson(systemPrompt, userPrompt, timeout = 15000) {
   }
 }
 
-module.exports = { callLLM, callLLMJson };
+module.exports = { callLLM, callLLMJson, callLLMWithOptions, callLLMJsonWithOptions };

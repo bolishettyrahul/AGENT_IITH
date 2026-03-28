@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, AlertCircle, ChevronDown, ChevronUp, ExternalLink, Bell } from 'lucide-react';
 import DebateSection from './DebateSection';
 import { HTTP_URL, WS_URL } from '../config';
 
 const AGENT_TITLES = {
-  bull: { title: 'GROWTH OPPORTUNITY ANALYST', color: '#6aab8e', icon: '📈' },
-  bear: { title: 'DOWNSIDE RISK ANALYST', color: '#b87a7a', icon: '📉' },
-  risk: { title: 'VOLATILITY OFFICER', color: '#c9a050', icon: '⚠️' },
-  mediator: { title: 'CHIEF INVESTMENT OFFICER', color: '#8480b8', icon: '🎯' },
+  bull: { title: 'GROWTH OPPORTUNITY ANALYST', color: '#6aab8e' },
+  bear: { title: 'DOWNSIDE RISK ANALYST', color: '#b87a7a' },
+  risk: { title: 'VOLATILITY OFFICER', color: '#c9a050' },
+  mediator: { title: 'CHIEF INVESTMENT OFFICER', color: '#8480b8' },
 };
 
 export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], targetTicker = '' }) {
@@ -319,7 +318,6 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
       return (
         <div className="base-card agent-column" data-agent={agentKey} style={{ opacity: 0.7, borderLeft: `4px solid ${config.color}` }}>
           <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem'}}>
-            <span style={{fontSize: '1.25rem'}}>{config.icon}</span>
             <h4 className="agent-title" style={{color: '#555', margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>{config.title}</h4>
           </div>
           <div className="skeleton-line" style={{width: '60%', height: '24px', marginBottom: '1.5rem'}}></div>
@@ -339,7 +337,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
       <div className="base-card agent-column agent-arrive-anim" data-agent={agentKey} style={{ borderLeft: `4px solid ${config.color}` }}>
         <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-            <span style={{fontSize: '1.5rem'}}>{config.icon}</span>
+
             <h4 className="agent-title" style={{color: config.color, margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>{config.title}</h4>
           </div>
         </div>
@@ -376,7 +374,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                   <span className="reason-text">{reasonObj.text}</span>
                   {reasonObj.sources && reasonObj.sources.length > 0 && (
                     <span className="expand-icon">
-                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      {isExpanded ? '▲' : '▼'}
                     </span>
                   )}
                 </div>
@@ -413,7 +411,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                             <span className="source-publisher">{article.publisher}</span>
                             {article.url && (
                               <a href={article.url} target="_blank" rel="noopener noreferrer" className="source-link-icon">
-                                <ExternalLink size={12} />
+                                →
                               </a>
                             )}
                           </div>
@@ -436,7 +434,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           <div className="explainability-footer">
             <button className="explainability-toggle" onClick={() => setShowAllSources(!showAllSources)}>
               {showAllSources ? 'HIDE' : 'VIEW'} ALL SOURCES ({allSourceIds.length})
-              {showAllSources ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {showAllSources ? '▲' : '▼'}
             </button>
             {showAllSources && (
               <div className="source-panel">
@@ -452,7 +450,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                       </div>
                       {article.url && (
                         <a href={article.url} target="_blank" rel="noopener noreferrer" className="source-link-icon">
-                          <ExternalLink size={12} />
+                          →
                         </a>
                       )}
                     </div>
@@ -482,7 +480,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
       
       <nav className="top-navbar">
         <div className="navbar-brand" onClick={onHome} style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-          <ArrowLeft size={16}/> MARKET.INTEL
+          ← MARKET.INTEL
         </div>
         <div className="navbar-status" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button
@@ -490,7 +488,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
             onClick={onViewTracked}
             style={{ cursor: 'pointer', background: 'transparent', border: '1px solid var(--border-color)', color: '#6aab8e', fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.08em' }}
           >
-            <Bell size={12} style={{ display: 'inline-block', marginRight: '4px', marginBottom: '-2px' }} />
+            [ALERTS]
             TRACKED ({trackedStocks.length})
           </button>
           {loading ? (
@@ -508,14 +506,14 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
         {/* Error Banner */}
         {errorState && (
           <div className="anim-stagger-1" style={{backgroundColor: 'rgba(184, 122, 122, 0.1)', border: '1px solid rgba(184, 122, 122, 0.3)', color: '#c49898', padding: '1rem 1.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem'}}>
-            <AlertCircle size={18} />
+            !
             {errorState}
           </div>
         )}
 
         {!wsConnected && !loading && (
           <div className="anim-stagger-1" style={{backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#fbbf24', padding: '0.75rem 1.25rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem'}}>
-            <AlertCircle size={16} />
+            !
             WebSocket offline — analysis can still be triggered but live streaming updates may not appear until reconnection.
           </div>
         )}
@@ -597,7 +595,6 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
           <div>
             <div className="base-card decision-wrap agent-arrive-anim" style={{ borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
               <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem'}}>
-                <span style={{fontSize: '1.75rem'}}>{AGENT_TITLES.mediator.icon}</span>
                 <h3 style={{color: AGENT_TITLES.mediator.color, margin: 0, fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em'}}>
                   {AGENT_TITLES.mediator.title}
                 </h3>
@@ -628,7 +625,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
               {!trackedStocks.find(s => s.ticker === tickerInput.toUpperCase().trim()) && (
                 <div style={{ marginTop: '2rem' }}>
                   <button className="btn-primary" onClick={handleTrackStock} style={{ padding: '0.875rem 2rem', background: 'transparent', color: '#6aab8e', border: '1px solid #6aab8e' }}>
-                    <Bell size={16} style={{ display: 'inline', marginRight: '0.5rem', marginBottom: '-2px' }} />
+                    [NEW]
                     TRACK STOCK VIRTUALLY
                   </button>
                 </div>
@@ -637,8 +634,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
 
             {/* Interactive CIO Response Field */}
             <div key={analysisId} className="base-card agent-arrive-anim" style={{ marginTop: '2.5rem', padding: '2rem', borderLeft: `4px solid ${AGENT_TITLES.mediator.color}` }}>
-              <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem'}}>
-                <span style={{fontSize: '1.25rem'}}>{AGENT_TITLES.mediator.icon}</span>
+              <div style={{marginBottom: '1.5rem'}}>
                 <h4 style={{fontSize: '0.75rem', fontWeight: 800, margin: 0, color: AGENT_TITLES.mediator.color, textTransform: 'uppercase', letterSpacing: '0.05em'}}>
                   {AGENT_TITLES.mediator.title} Constraint Analysis
                 </h4>
@@ -655,7 +651,7 @@ export default function Dashboard({ onHome, onViewTracked, trackedStocks = [], t
                       borderLeft: `3px solid ${log.sender === 'You' ? '#8480b8' : AGENT_TITLES.mediator.color}`
                     }}>
                       <strong style={{color: log.sender === 'You' ? '#c4b5fd' : AGENT_TITLES.mediator.color, marginRight: '0.5rem'}}>
-                        {log.sender === 'You' ? '👤 You' : `${AGENT_TITLES.mediator.icon} ${AGENT_TITLES.mediator.title}`}:
+                        {log.sender === 'You' ? 'You' : AGENT_TITLES.mediator.title}:
                       </strong>
                       <span style={{color: log.sender === 'You' ? '#d1d5db' : '#e0e7ff'}}>{log.text}</span>
                     </div>

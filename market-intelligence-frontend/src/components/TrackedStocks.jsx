@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Activity, Bell, X, ExternalLink, RefreshCw } from 'lucide-react';
+import { X } from 'lucide-react';
 
 // Lightweight SVG line chart component — no external libraries
 function PriceChart({ points }) {
@@ -101,7 +101,7 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
               onClick={() => onReanalyze(stock.ticker)} 
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', border: '1px solid #3b82f6' }}
             >
-              <RefreshCw size={16} /> RE-ANALYZE STOCK
+              [REFRESH] RE-ANALYZE STOCK
             </button>
             <button className="btn-primary" onClick={() => setExpandedStock(null)} style={{ padding: '0.75rem 1.5rem', background: 'transparent' }}>
               CLOSE
@@ -139,7 +139,7 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
                     <div key={idx} style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
                       <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.25rem' }}>{src.publisher} &bull; {src.providerPublishTime}</div>
                       <a href={src.link} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {src.title} <ExternalLink size={14} />
+                        {src.title} →
                       </a>
                     </div>
                   ))}
@@ -157,10 +157,10 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
       <div className="background-glow" />
       <nav className="top-navbar">
         <div className="navbar-brand" onClick={onBack} style={{display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer'}}>
-          <ArrowLeft size={16}/> BACK TO DASHBOARD
+          ← BACK TO DASHBOARD
         </div>
         <div className="navbar-status">
-          <span className="status-indicator online"><Activity size={12} style={{display: 'inline-block', marginRight:'4px'}}/> MONITORING ACTIVE</span>
+          <span className="status-indicator online">[ACTIVE] MONITORING ACTIVE</span>
         </div>
       </nav>
 
@@ -171,7 +171,7 @@ export default function TrackedStocks({ onBack, trackedStocks, alerts, onReanaly
 
         {trackedStocks.length === 0 ? (
           <div className="base-card" style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>
-            <Bell size={48} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
+            [EMPTY]
             <h3>No stocks currently tracked</h3>
             <p style={{ marginTop: '0.5rem' }}>Analyze a stock on the dashboard and click "TRACK STOCK" to monitor it here.</p>
           </div>

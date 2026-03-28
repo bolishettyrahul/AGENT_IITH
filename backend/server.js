@@ -11,7 +11,7 @@ const { runBearAgent } = require('./agents/bear');
 const { runRiskAgent } = require('./agents/risk');
 const { runMediatorAgent } = require('./agents/mediator');
 const { runDebate } = require('./agents/debate');
-const { callLLMJson } = require('./agents/llm');
+const { callLLMJson, callLLMJsonWithOptions } = require('./agents/llm');
 const {
   saveSignal, saveDebateTurn, saveDebateSummary,
   loadTrackedStocks, upsertTrackedStock, removeTrackedStock,
@@ -203,7 +203,13 @@ Return ONLY valid JSON:
     const historyLines = history.map((m) => `${m.role === 'user' ? 'User' : 'Mediator'}: ${m.content}`).join('\n');
     const userPrompt = historyLines ? `${historyLines}\nUser: ${message}` : `User: ${message}`;
 
-    const llmResult = await callLLMJson(systemPrompt, userPrompt, 10000);
+    let chatProvider = (process.env.CHAT_LLM_PROVIDER || 'featherless').toLowerCase();
+    if (chatProvider === 'featherless' && (!process.env.FEATHERLESS_KEY || !process.env.FEATHERLESS_MODEL)) {
+      console.warn('[Chat] Featherless not fully configured, falling back to Groq for /chat');
+      chatProvider = 'groq';
+    }
+
+    const llmResult = await callLLMJsonWithOptions(systemPrompt, userPrompt, 10000, { provider: chatProvider });
 
     saveChatMessage({ ticker, role: 'user', content: message }).catch((e) => console.warn('[DB] saveChatMessage user:', e.message));
     saveChatMessage({ ticker, role: 'assistant', content: llmResult.response }).catch((e) => console.warn('[DB] saveChatMessage assistant:', e.message));
